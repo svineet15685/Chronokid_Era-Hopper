@@ -1,0 +1,607 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#14231e">
+  <title>Chronokid: Era Hopper</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --ink: #16231f;
+      --paper: #f6efd9;
+      --lime: #c6f36b;
+      --coral: #ff8066;
+      --line: rgba(246, 239, 217, .22);
+      font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+    body {
+      display: grid;
+      place-items: center;
+      color: var(--paper);
+      background: #111b1a;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+    }
+    .game-shell {
+      position: relative;
+      width: min(100vw, 160vh);
+      aspect-ratio: 16 / 9;
+      overflow: hidden;
+      background: #182e2b;
+      box-shadow: 0 22px 80px #0009;
+      isolation: isolate;
+    }
+    canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+    .topbar {
+      position: absolute;
+      z-index: 2;
+      inset: 16px 20px auto;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      pointer-events: none;
+      text-shadow: 0 2px 3px #1119;
+    }
+    .brand { font-size: 12px; font-weight: 900; letter-spacing: 1.2px; text-transform: uppercase; }
+    .brand span { color: var(--lime); }
+    .hud { display: flex; align-items: center; gap: 18px; font-size: 13px; font-weight: 800; }
+    .hud-item { white-space: nowrap; }
+    .hud-label { color: #fff9; margin-right: 5px; font-size: 10px; letter-spacing: .8px; }
+    #hearts { color: #ff8066; letter-spacing: 2px; font-size: 17px; vertical-align: -1px; }
+    .era-pill { padding: 7px 10px; border: 1px solid #fff6; background: #101b1c99; border-radius: 3px; }
+    .overlay {
+      position: absolute;
+      z-index: 3;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background: linear-gradient(90deg, #111b1acc, #111b1a85 58%, #111b1a55);
+      transition: opacity .22s ease, visibility .22s ease;
+    }
+    .overlay.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+    .panel { width: min(470px, 90%); animation: arrive .38s both; }
+    @keyframes arrive { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+    .eyebrow { color: var(--lime); font-size: 11px; font-weight: 900; letter-spacing: 2px; text-transform: uppercase; }
+    h1 { margin: 10px 0 10px; max-width: 430px; font-size: clamp(35px, 6vw, 66px); line-height: .94; letter-spacing: 0; text-transform: uppercase; }
+    h1 em { color: var(--lime); font-style: normal; }
+    .subtitle { max-width: 380px; margin: 16px 0 24px; color: #f6efd9d9; font-size: 15px; line-height: 1.55; }
+    .controls-copy { display: flex; flex-wrap: wrap; gap: 8px 14px; margin: 0 0 24px; color: #f6efd9ba; font-size: 12px; }
+    kbd { display: inline-block; min-width: 24px; padding: 4px 6px; border: 1px solid #fff5; border-bottom-width: 2px; border-radius: 3px; color: white; text-align: center; font-family: inherit; font-size: 11px; font-weight: 700; }
+    button {
+      min-height: 46px;
+      padding: 0 19px;
+      border: 0;
+      border-radius: 3px;
+      color: var(--ink);
+      background: var(--lime);
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 900;
+      letter-spacing: .5px;
+      text-transform: uppercase;
+      cursor: pointer;
+      box-shadow: 0 4px 0 #819b47;
+      transition: transform .12s ease, filter .12s ease;
+      touch-action: manipulation;
+    }
+    button:hover { filter: brightness(1.08); transform: translateY(-1px); }
+    button:active { transform: translateY(2px); box-shadow: 0 2px 0 #819b47; }
+    .secondary { margin-left: 9px; border: 1px solid #fff5; color: var(--paper); background: #fff1; box-shadow: none; }
+    .secondary:active { box-shadow: none; }
+    .mobile-controls { display: none; position: absolute; z-index: 2; inset: auto 16px 14px; justify-content: space-between; pointer-events: none; }
+    .mobile-group { display: flex; gap: 9px; }
+    .mobile-controls button {
+      width: 54px; min-width: 54px; height: 50px; min-height: 50px; padding: 0;
+      border: 1px solid #fff5; color: white; background: #10201fbf;
+      font-size: 20px; box-shadow: 0 3px 0 #07110f99; pointer-events: auto;
+      touch-action: none;
+    }
+    .mobile-controls button.jump { width: 66px; min-width: 66px; color: var(--ink); background: var(--lime); border: 0; font-size: 11px; }
+    .sound-toggle {
+      position: absolute; z-index: 4; right: 18px; bottom: 16px; width: 38px; min-width: 38px; height: 36px; min-height: 36px;
+      padding: 0; border: 1px solid #fff4; color: white; background: #10201f9c; font-size: 16px; box-shadow: none;
+    }
+    @media (pointer: coarse), (max-width: 700px) {
+      .mobile-controls { display: flex; }
+      .topbar { inset: 10px 12px auto; }
+      .brand { font-size: 9px; }
+      .hud { gap: 8px; font-size: 10px; }
+      .hud-label { font-size: 8px; }
+      .era-pill { padding: 5px 7px; }
+      #hearts { font-size: 13px; }
+      .sound-toggle { right: 12px; bottom: auto; top: 48px; width: 30px; min-width: 30px; height: 30px; min-height: 30px; }
+      .subtitle { font-size: 13px; margin: 11px 0 15px; }
+      .controls-copy { margin-bottom: 15px; }
+      .overlay { background: #111b1acc; }
+    }
+    @media (max-height: 430px) {
+      .panel { transform: scale(.84); }
+      .overlay { padding: 10px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="game-shell" aria-label="Chronokid: Era Hopper platform game">
+    <canvas id="game" width="960" height="540" aria-label="Platform game area"></canvas>
+    <header class="topbar">
+      <div class="brand">CHRONO<span>KID</span> / ERA HOPPER</div>
+      <div class="hud" aria-live="polite">
+        <div class="hud-item"><span class="hud-label">SCORE</span><span id="score">0000</span></div>
+        <div class="hud-item"><span class="hud-label">LIVES</span><span id="hearts">♥♥♥</span></div>
+        <div class="era-pill" id="era">STONE AGE</div>
+      </div>
+    </header>
+    <section class="overlay" id="overlay">
+      <div class="panel">
+        <div class="eyebrow" id="eyebrow">A tiny hero. A very big timeline.</div>
+        <h1 id="title">Chronokid:<br><em>Era Hopper</em></h1>
+        <p class="subtitle" id="message">Dash through three strange ages, scoop up the shiny stuff, and keep your feet out of trouble.</p>
+        <div class="controls-copy" id="instructions"><span><kbd>←</kbd> <kbd>→</kbd> move</span><span><kbd>SPACE</kbd> / <kbd>↑</kbd> jump</span><span>Collect everything you can.</span></div>
+        <button id="action">Play Game</button>
+        <button class="secondary" id="restart" hidden>Play Again</button>
+      </div>
+    </section>
+    <div class="mobile-controls" aria-label="Touch controls">
+      <div class="mobile-group"><button data-control="left" aria-label="Move left">←</button><button data-control="right" aria-label="Move right">→</button></div>
+      <button class="jump" data-control="jump" aria-label="Jump">JUMP</button>
+    </div>
+    <button class="sound-toggle" id="sound" aria-label="Toggle sound" title="Toggle sound">♫</button>
+  </main>
+  <script>
+  (() => {
+    'use strict';
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    const scoreEl = document.getElementById('score');
+    const heartsEl = document.getElementById('hearts');
+    const eraEl = document.getElementById('era');
+    const overlay = document.getElementById('overlay');
+    const titleEl = document.getElementById('title');
+    const eyebrowEl = document.getElementById('eyebrow');
+    const messageEl = document.getElementById('message');
+    const instructionsEl = document.getElementById('instructions');
+    const actionButton = document.getElementById('action');
+    const restartButton = document.getElementById('restart');
+    const soundButton = document.getElementById('sound');
+    const W = canvas.width;
+    const H = canvas.height;
+    const FLOOR = 462;
+    const WORLD_END = 3440;
+    const eras = [
+      { name: 'STONE AGE', sky: '#bfd9bd', far: '#729a76', near: '#426d56', ground: '#514735', top: '#9a8153', accent: '#f5cd67', gravity: 1900, speed: 245, jump: 650, collectible: 'berry' },
+      { name: 'MEDIEVAL AGE', sky: '#b9c8d0', far: '#82959c', near: '#596e78', ground: '#4e4c50', top: '#aaa1a0', accent: '#ffcf5c', gravity: 1600, speed: 285, jump: 660, collectible: 'coin' },
+      { name: 'FUTURE AGE', sky: '#101c3c', far: '#1d3963', near: '#216574', ground: '#263a58', top: '#32d9c1', accent: '#78f5e3', gravity: 1050, speed: 330, jump: 630, collectible: 'core' }
+    ];
+    const keys = { left: false, right: false, jump: false };
+    let audioContext = null;
+    let soundOn = true;
+    let gameState = 'start';
+    let eraIndex = 0;
+    let score = 0;
+    let lives = 3;
+    let cameraX = 0;
+    let lastTime = 0;
+    let elapsed = 0;
+    let player;
+    let platforms = [];
+    let hazards = [];
+    let pickups = [];
+    let particles = [];
+
+    function createPlayer() {
+      return { x: 75, y: FLOOR - 48, w: 32, h: 44, vx: 0, vy: 0, grounded: true, invulnerable: 0, facing: 1, coyote: 0, jumpBuffer: 0 };
+    }
+
+    function buildLevel(index) {
+      eraIndex = index;
+      const era = eras[index];
+      platforms = [{ x: 0, y: FLOOR, w: WORLD_END, h: 90, kind: 'ground' }];
+      hazards = [];
+      pickups = [];
+      particles = [];
+      const elevated = [
+        [370, 385, 145], [705, 340, 135], [1050, 390, 140], [1380, 330, 150], [1740, 385, 145], [2070, 340, 145], [2420, 385, 150], [2760, 330, 150], [3100, 380, 135]
+      ];
+      elevated.forEach(([x, y, w]) => platforms.push({ x, y, w, h: 18, kind: 'ledge' }));
+      const hazardXs = [520, 900, 1220, 1580, 1930, 2290, 2630, 2970, 3260];
+      hazardXs.forEach((x, i) => {
+        if (index === 0) hazards.push({ type: 'boulder', x, y: FLOOR - 37, w: 38, h: 37, baseX: x, phase: i * 1.7, range: 55 + (i % 3) * 15 });
+        if (index === 1) hazards.push(i % 2 ? { type: 'bat', x, y: FLOOR - 132 - (i % 3) * 23, w: 42, h: 28, baseY: FLOOR - 132 - (i % 3) * 23, phase: i * 1.2 } : { type: 'spikes', x, y: FLOOR - 24, w: 48, h: 24 });
+        if (index === 2) hazards.push(i % 2 ? { type: 'drone', x, y: FLOOR - 126 - (i % 3) * 24, w: 38, h: 30, baseY: FLOOR - 126 - (i % 3) * 24, phase: i * 1.4 } : { type: 'laser', x, y: FLOOR - 84, w: 16, h: 84, phase: i * 1.1 });
+      });
+      for (let i = 0; i < 25; i++) {
+        const x = 235 + i * 132;
+        const ledge = elevated.find(([ledgeX]) => Math.abs(ledgeX + 55 - x) < 75);
+        pickups.push({ x, y: ledge ? ledge[1] - 35 : FLOOR - 66 - (i % 3) * 18, r: 12, taken: false, phase: i * .6 });
+      }
+      player = createPlayer();
+      cameraX = 0;
+      eraEl.textContent = era.name;
+    }
+
+    function startAudio() {
+      if (!soundOn) return null;
+      try {
+        if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioContext.state === 'suspended') audioContext.resume();
+        return audioContext;
+      } catch (_) { return null; }
+    }
+
+    function tone(frequency, duration, type = 'square', volume = .045, endFrequency = frequency) {
+      const audio = startAudio();
+      if (!audio) return;
+      const oscillator = audio.createOscillator();
+      const gain = audio.createGain();
+      oscillator.type = type;
+      oscillator.frequency.setValueAtTime(frequency, audio.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(Math.max(1, endFrequency), audio.currentTime + duration);
+      gain.gain.setValueAtTime(volume, audio.currentTime);
+      gain.gain.exponentialRampToValueAtTime(.001, audio.currentTime + duration);
+      oscillator.connect(gain);
+      gain.connect(audio.destination);
+      oscillator.start();
+      oscillator.stop(audio.currentTime + duration);
+    }
+
+    function playSound(name) {
+      if (!soundOn) return;
+      if (name === 'jump') tone(260, .11, 'square', .035, 430);
+      if (name === 'collect') { tone(620, .08, 'sine', .045, 920); setTimeout(() => tone(920, .1, 'sine', .035, 1120), 55); }
+      if (name === 'hit') tone(180, .25, 'sawtooth', .05, 65);
+      if (name === 'advance') { tone(440, .1, 'triangle', .035, 660); setTimeout(() => tone(660, .16, 'triangle', .04, 880), 90); }
+    }
+
+    function showOverlay(type) {
+      overlay.classList.remove('hidden');
+      restartButton.hidden = true;
+      instructionsEl.hidden = type !== 'start';
+      if (type === 'start') {
+        eyebrowEl.textContent = 'A tiny hero. A very big timeline.';
+        titleEl.innerHTML = 'Chronokid:<br><em>Era Hopper</em>';
+        messageEl.textContent = 'Dash through three strange ages, scoop up the shiny stuff, and keep your feet out of trouble.';
+        actionButton.textContent = 'Play Game';
+        actionButton.onclick = beginGame;
+      } else if (type === 'clear') {
+        eyebrowEl.textContent = `ERA ${eraIndex + 1} COMPLETE`;
+        titleEl.innerHTML = eraIndex === 2 ? 'Timeline<br><em>secured!</em>' : 'Time to<br><em>hop.</em>';
+        messageEl.textContent = eraIndex === 2 ? 'You made it through the whole timeline. The future is looking pretty good.' : `Next stop: ${eras[eraIndex + 1].name.toLowerCase()}. The rules are about to change.`;
+        actionButton.textContent = eraIndex === 2 ? 'See Final Score' : 'Advance to Next Era';
+        actionButton.onclick = advanceEra;
+      } else {
+        const won = type === 'victory';
+        eyebrowEl.textContent = won ? 'ALL AGES, ONE LEGEND' : 'THAT TIMELINE GOT BUMPY';
+        titleEl.innerHTML = won ? 'Time well<br><em>hopped.</em>' : 'Game<br><em>over.</em>';
+        messageEl.textContent = `${won ? 'Timeline complete' : 'The adventure ends here'} — final score: ${String(score).padStart(4, '0')}.`;
+        actionButton.hidden = true;
+        restartButton.hidden = false;
+        restartButton.onclick = beginGame;
+      }
+    }
+
+    function hideOverlay() {
+      overlay.classList.add('hidden');
+      actionButton.blur();
+      restartButton.blur();
+      actionButton.hidden = false;
+      restartButton.hidden = true;
+    }
+
+    function beginGame() {
+      startAudio();
+      score = 0;
+      lives = 3;
+      elapsed = 0;
+      buildLevel(0);
+      updateHud();
+      gameState = 'playing';
+      hideOverlay();
+    }
+
+    function advanceEra() {
+      playSound('advance');
+      if (eraIndex === 2) {
+        gameState = 'victory';
+        showOverlay('victory');
+        return;
+      }
+      buildLevel(eraIndex + 1);
+      gameState = 'playing';
+      hideOverlay();
+    }
+
+    function updateHud() {
+      scoreEl.textContent = String(score).padStart(4, '0');
+      heartsEl.textContent = '♥'.repeat(Math.max(0, lives)) + '♡'.repeat(Math.max(0, 3 - lives));
+    }
+
+    function overlaps(a, b) {
+      return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+    }
+
+    function jump() {
+      player.jumpBuffer = .14;
+    }
+
+    function hurt() {
+      if (player.invulnerable > 0) return;
+      lives--;
+      playSound('hit');
+      player.invulnerable = 1.25;
+      player.vy = -360;
+      player.vx = -player.facing * 210;
+      if (lives <= 0) {
+        lives = 0;
+        updateHud();
+        gameState = 'gameover';
+        showOverlay('gameover');
+      } else updateHud();
+    }
+
+    function update(dt) {
+      if (gameState !== 'playing') return;
+      elapsed += dt;
+      const era = eras[eraIndex];
+      const previousBottom = player.y + player.h;
+      player.invulnerable = Math.max(0, player.invulnerable - dt);
+      player.jumpBuffer = Math.max(0, player.jumpBuffer - dt);
+      if (keys.left !== keys.right) {
+        player.vx = keys.left ? -era.speed : era.speed;
+        player.facing = keys.left ? -1 : 1;
+      } else player.vx *= Math.pow(.0008, dt);
+      player.x += player.vx * dt;
+      player.x = Math.max(0, Math.min(WORLD_END - player.w, player.x));
+      player.vy += era.gravity * dt;
+      player.y += player.vy * dt;
+      player.grounded = false;
+      for (const platform of platforms) {
+        if (player.vy >= 0 && previousBottom <= platform.y + 5 && player.y + player.h >= platform.y && player.x + player.w > platform.x && player.x < platform.x + platform.w) {
+          player.y = platform.y - player.h;
+          player.vy = 0;
+          player.grounded = true;
+          player.coyote = .1;
+        }
+      }
+      if (!player.grounded) player.coyote = Math.max(0, player.coyote - dt);
+      if (player.jumpBuffer > 0 && (player.grounded || player.coyote > 0)) {
+        player.vy = -era.jump;
+        player.grounded = false;
+        player.coyote = 0;
+        player.jumpBuffer = 0;
+        playSound('jump');
+      }
+      if (player.y > H + 130) {
+        hurt();
+        player.x = Math.max(40, player.x - 90);
+        player.y = FLOOR - player.h;
+        player.vy = 0;
+      }
+      for (const hazard of hazards) {
+        if (hazard.type === 'boulder') {
+          hazard.x = hazard.baseX + Math.sin(elapsed * 1.7 + hazard.phase) * hazard.range;
+        } else if (hazard.type === 'bat' || hazard.type === 'drone') {
+          hazard.y = hazard.baseY + Math.sin(elapsed * 2.5 + hazard.phase) * 34;
+          hazard.x += Math.sin(elapsed * 1.1 + hazard.phase) * 12 * dt;
+        }
+        hazard.active = hazard.type !== 'laser' || Math.sin(elapsed * 2.4 + hazard.phase) > -.24;
+        if (hazard.active && overlaps(player, { x: hazard.x + 4, y: hazard.y + 3, w: hazard.w - 8, h: hazard.h - 5 })) hurt();
+      }
+      for (const pickup of pickups) {
+        if (!pickup.taken && overlaps(player, { x: pickup.x - pickup.r, y: pickup.y - pickup.r, w: pickup.r * 2, h: pickup.r * 2 })) {
+          pickup.taken = true;
+          score += 100;
+          updateHud();
+          playSound('collect');
+          for (let i = 0; i < 5; i++) particles.push({ x: pickup.x, y: pickup.y, vx: (Math.random() - .5) * 150, vy: -Math.random() * 180, life: .4, color: era.accent });
+        }
+      }
+      particles.forEach(p => { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 430 * dt; p.life -= dt; });
+      particles = particles.filter(p => p.life > 0);
+      cameraX = Math.max(0, Math.min(WORLD_END - W, player.x - W * .32));
+      if (player.x + player.w >= WORLD_END - 28) {
+        gameState = 'clear';
+        showOverlay('clear');
+      }
+    }
+
+    function rect(x, y, w, h, color) { ctx.fillStyle = color; ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h)); }
+
+    function drawBackground(era) {
+      const gradient = ctx.createLinearGradient(0, 0, 0, H);
+      gradient.addColorStop(0, era.sky);
+      gradient.addColorStop(1, eraIndex === 2 ? '#203151' : '#e0cba1');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, W, H);
+      if (eraIndex === 0) {
+        ctx.fillStyle = '#f9e6a6'; ctx.beginPath(); ctx.arc(785, 100, 43, 0, Math.PI * 2); ctx.fill();
+        for (let i = 0; i < 10; i++) {
+          const x = ((i * 157 - cameraX * .18) % (W + 120) + W + 120) % (W + 120) - 60;
+          const h = 90 + (i % 4) * 22;
+          rect(x, FLOOR - h - 30, 14, h + 40, i % 2 ? '#446e58' : '#568465');
+          ctx.fillStyle = '#628e66'; ctx.beginPath(); ctx.arc(x + 6, FLOOR - h - 20, 33, 0, Math.PI * 2); ctx.fill();
+          rect(x + 3, FLOOR - h + 14, 5, 11, '#e98259');
+        }
+      } else if (eraIndex === 1) {
+        ctx.fillStyle = '#f3e0b0'; ctx.beginPath(); ctx.arc(775, 105, 40, 0, Math.PI * 2); ctx.fill();
+        for (let i = 0; i < 7; i++) {
+          const x = ((i * 185 - cameraX * .22) % (W + 160) + W + 160) % (W + 160) - 90;
+          rect(x, 180 + (i % 2) * 30, 112, FLOOR - 180, '#6d7d81');
+          rect(x + 12, 158 + (i % 2) * 30, 87, 29, '#829297');
+          for (let j = 0; j < 3; j++) { rect(x + 15 + j * 31, 214 + (i % 2) * 30, 14, 26, '#485b64'); rect(x + 18 + j * 31, 210 + (i % 2) * 30, 8, 7, '#c4a863'); }
+        }
+      } else {
+        ctx.fillStyle = '#e2ffff';
+        for (let i = 0; i < 65; i++) {
+          const x = ((i * 193 - cameraX * .12) % W + W) % W;
+          const y = (i * 79) % 290;
+          ctx.globalAlpha = .25 + (i % 5) * .12; ctx.fillRect(x, y, i % 7 === 0 ? 3 : 2, i % 7 === 0 ? 3 : 2);
+        }
+        ctx.globalAlpha = 1;
+        for (let i = 0; i < 11; i++) {
+          const x = ((i * 111 - cameraX * .28) % (W + 90) + W + 90) % (W + 90) - 40;
+          const h = 95 + (i * 37) % 160;
+          rect(x, FLOOR - h, 48, h, i % 2 ? '#1b3455' : '#1a2d4b');
+          for (let yy = FLOOR - h + 13; yy < FLOOR - 12; yy += 21) for (let xx = x + 9; xx < x + 42; xx += 15) rect(xx, yy, 5, 8, (xx + yy) % 3 ? '#4cdbc8' : '#e777a8');
+        }
+      }
+    }
+
+    function drawPlatforms(era) {
+      for (const platform of platforms) {
+        const x = platform.x - cameraX;
+        if (x + platform.w < 0 || x > W) continue;
+        if (platform.kind === 'ground') {
+          rect(x, platform.y, platform.w, platform.h, era.ground);
+          rect(x, platform.y, platform.w, 9, era.top);
+          for (let tx = Math.floor(platform.x / 48) * 48; tx < platform.x + platform.w; tx += 48) {
+            const sx = tx - cameraX;
+            if (sx > -40 && sx < W + 10) { rect(sx, platform.y + 24 + (tx % 3) * 8, 20, 3, eraIndex === 2 ? '#365676' : '#ffffff19'); if (eraIndex !== 2) rect(sx + 26, platform.y + 48, 8, 4, '#1a1d1a55'); }
+          }
+          if (eraIndex === 2) rect(x, platform.y + 9, platform.w, 2, '#43f6dc');
+        } else {
+          rect(x, platform.y, platform.w, platform.h, era.top);
+          rect(x, platform.y + platform.h, platform.w, 7, era.ground);
+          if (eraIndex === 0) for (let bx = x + 8; bx < x + platform.w - 8; bx += 25) { rect(bx, platform.y + 5, 10, 4, '#705d42'); }
+          if (eraIndex === 1) for (let bx = x + 6; bx < x + platform.w - 6; bx += 34) { rect(bx, platform.y + 3, 2, 13, '#d4cbc0'); }
+          if (eraIndex === 2) { rect(x, platform.y - 2, platform.w, 2, '#b3fff5'); rect(x + 12, platform.y + 5, platform.w - 24, 2, '#65d8dc'); }
+        }
+      }
+    }
+
+    function drawHazards() {
+      for (const hazard of hazards) {
+        const x = hazard.x - cameraX;
+        if (x + hazard.w < -20 || x > W + 20) continue;
+        if (hazard.type === 'boulder') {
+          ctx.fillStyle = '#78664d'; ctx.beginPath(); ctx.ellipse(x + hazard.w / 2, hazard.y + hazard.h / 2, hazard.w / 2, hazard.h / 2, 0, 0, Math.PI * 2); ctx.fill();
+          rect(x + 10, hazard.y + 7, 9, 5, '#a58a64'); rect(x + 20, hazard.y + 23, 10, 5, '#554a39');
+        } else if (hazard.type === 'spikes') {
+          ctx.fillStyle = '#dce1dd'; ctx.beginPath(); ctx.moveTo(x, hazard.y + hazard.h); ctx.lineTo(x + 8, hazard.y + 5); ctx.lineTo(x + 16, hazard.y + hazard.h); ctx.lineTo(x + 24, hazard.y + 2); ctx.lineTo(x + 32, hazard.y + hazard.h); ctx.lineTo(x + 40, hazard.y + 6); ctx.lineTo(x + 48, hazard.y + hazard.h); ctx.closePath(); ctx.fill();
+          rect(x, hazard.y + hazard.h - 5, hazard.w, 5, '#9c5554');
+        } else if (hazard.type === 'bat') {
+          ctx.fillStyle = '#303640'; ctx.beginPath(); ctx.moveTo(x + 21, hazard.y + 12); ctx.lineTo(x + 2, hazard.y + 1 + Math.sin(elapsed * 16) * 5); ctx.lineTo(x + 8, hazard.y + 19); ctx.lineTo(x + 1, hazard.y + 24); ctx.lineTo(x + 18, hazard.y + 22); ctx.lineTo(x + 24, hazard.y + 28); ctx.lineTo(x + 27, hazard.y + 21); ctx.lineTo(x + 41, hazard.y + 24); ctx.lineTo(x + 34, hazard.y + 17); ctx.lineTo(x + 40, hazard.y + 2 + Math.sin(elapsed * 16) * 5); ctx.lineTo(x + 23, hazard.y + 12); ctx.fill();
+          rect(x + 25, hazard.y + 12, 3, 3, '#f4c650');
+        } else if (hazard.type === 'laser') {
+          rect(x + 5, hazard.y - 7, 7, 8, '#485c84');
+          if (hazard.active) { ctx.globalAlpha = .27; rect(x + 5, hazard.y, 7, hazard.h, '#ff5b77'); ctx.globalAlpha = 1; rect(x + 7, hazard.y, 3, hazard.h, '#ff7890'); }
+          rect(x + 3, hazard.y + hazard.h - 1, 11, 6, '#596a91');
+        } else {
+          ctx.fillStyle = '#48d9cb'; ctx.beginPath(); ctx.roundRect(x + 4, hazard.y + 5, 30, 20, 5); ctx.fill();
+          rect(x + 10, hazard.y + 12, 18, 3, '#183b5a'); rect(x + 15, hazard.y + 12, 6, 3, '#ff6c98');
+          ctx.strokeStyle = '#86f6e8'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x + 19, hazard.y + 4); ctx.lineTo(x + 19, hazard.y); ctx.stroke();
+          ctx.fillStyle = '#ffca64'; ctx.beginPath(); ctx.arc(x + 19, hazard.y - 2, 2, 0, Math.PI * 2); ctx.fill();
+        }
+      }
+    }
+
+    function drawPickups(era) {
+      pickups.forEach(pickup => {
+        if (pickup.taken) return;
+        const x = pickup.x - cameraX;
+        const y = pickup.y + Math.sin(elapsed * 4 + pickup.phase) * 5;
+        ctx.save(); ctx.translate(x, y); ctx.rotate(Math.sin(elapsed * 3 + pickup.phase) * .12);
+        if (era.collectible === 'berry') {
+          ctx.fillStyle = '#ed7661'; ctx.beginPath(); ctx.arc(-4, 1, 7, 0, Math.PI * 2); ctx.arc(4, 1, 7, 0, Math.PI * 2); ctx.fill();
+          rect(-2, -11, 5, 4, '#567e4b'); rect(1, -8, 6, 3, '#7da858');
+        } else if (era.collectible === 'coin') {
+          ctx.fillStyle = '#ffc84e'; ctx.beginPath(); ctx.ellipse(0, 0, 9, 12, 0, 0, Math.PI * 2); ctx.fill();
+          ctx.strokeStyle = '#fff0a5'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(0, 0, 4, 8, 0, 0, Math.PI * 2); ctx.stroke();
+        } else {
+          ctx.fillStyle = '#53f3da'; ctx.beginPath(); ctx.moveTo(0, -13); ctx.lineTo(9, -2); ctx.lineTo(6, 11); ctx.lineTo(-6, 11); ctx.lineTo(-9, -2); ctx.closePath(); ctx.fill();
+          rect(-2, -5, 4, 9, '#d8fff0');
+        }
+        ctx.restore();
+      });
+    }
+
+    function drawPlayer() {
+      if (player.invulnerable > 0 && Math.floor(elapsed * 14) % 2 === 0) return;
+      const x = Math.round(player.x - cameraX); const y = Math.round(player.y);
+      const flip = player.facing < 0;
+      ctx.save();
+      if (flip) { ctx.translate(x + player.w, 0); ctx.scale(-1, 1); } else ctx.translate(x, 0);
+      const px = 0;
+      // Tiny time-traveler silhouette, intentionally built from crisp canvas blocks.
+      rect(px + 7, y + 1, 20, 17, '#f2c36b');
+      rect(px + 11, y + 5, 3, 3, '#172d36'); rect(px + 22, y + 5, 3, 3, '#172d36');
+      rect(px + 9, y + 18, 19, 16, '#2e9a91');
+      rect(px + 3, y + 19, 8, 6, '#eaa959'); rect(px + 27, y + 20, 7, 6, '#eaa959');
+      rect(px + 10, y + 33, 7, 10, '#e8b85e'); rect(px + 21, y + 33, 7, 10, '#e8b85e');
+      rect(px + 8, y + 41, 10, 3, '#30404b'); rect(px + 20, y + 41, 11, 3, '#30404b');
+      rect(px + 9, y - 2, 18, 4, '#415b64'); rect(px + 13, y - 6, 11, 4, '#5fe2cb');
+      ctx.restore();
+    }
+
+    function drawFinish() {
+      const x = WORLD_END - 90 - cameraX;
+      rect(x + 29, FLOOR - 94, 5, 94, '#d9e7c9');
+      ctx.fillStyle = eras[eraIndex].accent; ctx.beginPath(); ctx.moveTo(x + 34, FLOOR - 92); ctx.lineTo(x + 82, FLOOR - 77); ctx.lineTo(x + 34, FLOOR - 60); ctx.closePath(); ctx.fill();
+      rect(x + 19, FLOOR - 5, 25, 5, '#1b2826');
+    }
+
+    function draw() {
+      const era = eras[eraIndex];
+      drawBackground(era);
+      drawPlatforms(era);
+      drawFinish();
+      drawPickups(era);
+      drawHazards();
+      particles.forEach(p => { ctx.globalAlpha = Math.max(0, p.life / .4); rect(p.x - cameraX, p.y, 4, 4, p.color); });
+      ctx.globalAlpha = 1;
+      drawPlayer();
+      if (gameState === 'playing') {
+        const progress = Math.min(1, player.x / WORLD_END);
+        rect(0, H - 4, W * progress, 4, era.accent);
+      }
+    }
+
+    function frame(timestamp) {
+      const dt = Math.min(.033, Math.max(0, (timestamp - lastTime) / 1000 || 0));
+      lastTime = timestamp;
+      update(dt);
+      draw();
+      requestAnimationFrame(frame);
+    }
+
+    window.addEventListener('keydown', event => {
+      if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'Space'].includes(event.code)) event.preventDefault();
+      if (event.code === 'ArrowLeft' || event.code === 'KeyA') keys.left = true;
+      if (event.code === 'ArrowRight' || event.code === 'KeyD') keys.right = true;
+      if ((event.code === 'Space' || event.code === 'ArrowUp' || event.code === 'KeyW') && !event.repeat) jump();
+      if (event.code === 'Enter' && gameState === 'start') beginGame();
+    });
+    window.addEventListener('keyup', event => {
+      if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'Space'].includes(event.code)) event.preventDefault();
+      if (event.code === 'ArrowLeft' || event.code === 'KeyA') keys.left = false;
+      if (event.code === 'ArrowRight' || event.code === 'KeyD') keys.right = false;
+    });
+    window.addEventListener('blur', () => { keys.left = keys.right = keys.jump = false; });
+    document.querySelectorAll('[data-control]').forEach(button => {
+      const control = button.dataset.control;
+      const down = event => { event.preventDefault(); if (control === 'jump') jump(); else keys[control] = true; button.setPointerCapture?.(event.pointerId); };
+      const up = event => { event.preventDefault(); if (control !== 'jump') keys[control] = false; };
+      button.addEventListener('pointerdown', down);
+      button.addEventListener('pointerup', up);
+      button.addEventListener('pointercancel', up);
+      button.addEventListener('lostpointercapture', up);
+    });
+    soundButton.addEventListener('click', () => {
+      soundOn = !soundOn;
+      soundButton.textContent = soundOn ? '♫' : '×';
+      soundButton.setAttribute('aria-label', soundOn ? 'Turn sound off' : 'Turn sound on');
+      if (soundOn) startAudio();
+    });
+
+    buildLevel(0);
+    showOverlay('start');
+    requestAnimationFrame(frame);
+  })();
+  </script>
+</body>
+</html>

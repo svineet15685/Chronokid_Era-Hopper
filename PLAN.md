@@ -6,18 +6,19 @@ Last reviewed: 2026-10-11
 
 1. Read this file and `.github/copilot-instructions.md` before making project changes.
 2. Check `git status`, the latest commit, and installed Node/npm/Docker versions. This document is a checkpoint, not a substitute for live state.
-3. Preserve uncommitted work. The root `index.html` is the original playable game prototype and is currently untracked; migrate it in Phase 2 without deleting it before parity is checked.
+3. Preserve uncommitted work. The root `index.html` is the original playable game prototype; keep it tracked during Phase 2 and do not delete it before parity is checked.
 4. Confirm the active phase with the user if scope is unclear. Complete its exit checks and update this plan before pausing again.
 
 ## Current Snapshot
 
-- Phase 0 guardrails: complete. Shared instructions, API security rules, resumable plan, CI, and Dependabot are in place. Type-check, production build, migration drift check, audit threshold, and env ignore checks passed.
+- Phase 0 guardrails: complete. Shared instructions, API security rules, resumable plan, CI, Dependabot, and read-only code review agent are in place. Type-check, production build, migration drift check, audit threshold, and env ignore checks passed.
 - Phase 1 foundation: scaffold committed as `eb0413a`. Type-check, builds, and migration generation passed. Database migration application remains unverified because Docker/PostgreSQL was unavailable in the last environment.
 - Phase 2 game migration: next; not started. Preserve all prototype behavior and keep the root prototype recoverable until migration parity is demonstrated.
 - Stack: npm workspaces, Vite + TypeScript client, Fastify + TypeScript API, PostgreSQL + Drizzle, shared TypeScript contracts.
 - Security posture: browser gameplay is untrusted/client-authoritative; a leaderboard is casual unless gameplay becomes server-authoritative or runs are independently verified.
 - Known dependency note: production dependencies audited clean; the full audit reports four moderate findings in Drizzle Kit's development-only legacy esbuild loader. CI blocks high/critical advisories. Recheck before release and do not force unsafe major downgrades merely to silence the report.
 - Environment note: `.env.example` is the safe local template. API runtime and Drizzle CLI load the root `.env`; local `.env` files are ignored by Git.
+- Review finding to carry into Phase 2: at a 375x667 portrait viewport, the prototype's start button is clipped below the game shell. Fix responsive start-screen sizing before calling the migrated game playable on mobile.
 
 ## Phases and Exit Checks
 
