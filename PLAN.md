@@ -12,7 +12,7 @@ Last reviewed: 2026-10-11
 ## Current Snapshot
 
 - Phase 0 guardrails: complete. Shared instructions, API security rules, resumable plan, CI, Dependabot, and read-only code review agent are in place. Type-check, production build, migration drift check, audit threshold, and env ignore checks passed.
-- Phase 1 foundation: scaffold committed as `eb0413a`. Type-check, builds, and migration generation passed. Database migration application remains unverified because Docker/PostgreSQL was unavailable in the last environment.
+- Phase 1 foundation: complete (2026-10-11). Docker is unavailable and port 5432 belongs to an unrelated PostgreSQL 18 service, so development uses a project-only PostgreSQL 18 cluster created with `initdb` at `%LOCALAPPDATA%\Chronokid\pgdata` on `localhost:5433` (`npm run db:local:start|stop|status`). Its randomly generated password exists only in the ignored root `.env`. Migration `0000_legal_praxagora` is applied. The cluster is not a Windows service; start it after reboots.
 - Phase 2 game migration: next; not started. Preserve all prototype behavior and keep the root prototype recoverable until migration parity is demonstrated.
 - Stack: npm workspaces, Vite + TypeScript client, Fastify + TypeScript API, PostgreSQL + Drizzle, shared TypeScript contracts.
 - Security posture: browser gameplay is untrusted/client-authoritative; a leaderboard is casual unless gameplay becomes server-authoritative or runs are independently verified.
@@ -32,10 +32,11 @@ Status: complete
 
 ### Phase 1: Project Foundation
 
-Status: scaffold complete; live database verification pending
+Status: complete (2026-10-11)
 
 - Create the web/API/shared workspaces, local PostgreSQL Compose service, schema/migration baseline, and health/readiness endpoints.
-- Exit: web and API start together; web proxy reaches API; migration applies to local PostgreSQL; database readiness reports ready. Keep the root prototype untouched until Phase 2.
+- Verified: type-check and build pass; `npm run dev` starts web and API; `/api/health` through the Vite proxy returns `ok`; `npm run db:migrate` applied to the local cluster (`players`, `runs`, `drizzle.__drizzle_migrations`); `/api/health/ready` returns 200 `ready`.
+- Exit: web and API start together; web proxy reaches API; migration applies to the local development database; database readiness reports ready. Keep the root prototype untouched until Phase 2.
 
 ### Phase 2: Game Migration
 
