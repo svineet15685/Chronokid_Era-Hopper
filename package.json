@@ -14,6 +14,9 @@
     "test": "npm run test --workspaces --if-present",
     "db:up": "docker compose up -d db",
     "db:down": "docker compose down",
+    "db:local:start": "node scripts/local-db.mjs start",
+    "db:local:stop": "node scripts/local-db.mjs stop",
+    "db:local:status": "node scripts/local-db.mjs status",
     "db:generate": "npm run db:generate --workspace=@chronokid/api",
     "db:migrate": "npm run db:migrate --workspace=@chronokid/api"
   },
