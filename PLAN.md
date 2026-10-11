@@ -12,7 +12,7 @@ Last reviewed: 2026-10-11
 ## Current Snapshot
 
 - Phase 0 guardrails: complete. Shared instructions, API security rules, resumable plan, CI, Dependabot, and read-only code review agent are in place. Type-check, production build, migration drift check, audit threshold, and env ignore checks passed.
-- Phase 1 foundation: scaffold committed as `eb0413a`. Type-check, builds, and migration generation passed. Database migration application remains unverified because Docker/PostgreSQL was unavailable in the last environment.
+- Phase 1 foundation: scaffold committed as `eb0413a`. Type-check, builds, and migration generation passed. Migration is still pending: Docker is unavailable, and the local PostgreSQL server rejects the default `chronokid` user with authentication error `28P01`. No migration was applied.
 - Phase 2 game migration: next; not started. Preserve all prototype behavior and keep the root prototype recoverable until migration parity is demonstrated.
 - Stack: npm workspaces, Vite + TypeScript client, Fastify + TypeScript API, PostgreSQL + Drizzle, shared TypeScript contracts.
 - Security posture: browser gameplay is untrusted/client-authoritative; a leaderboard is casual unless gameplay becomes server-authoritative or runs are independently verified.
@@ -32,10 +32,11 @@ Status: complete
 
 ### Phase 1: Project Foundation
 
-Status: scaffold complete; live database verification pending
+Status: scaffold complete; local database authentication blocked
 
 - Create the web/API/shared workspaces, local PostgreSQL Compose service, schema/migration baseline, and health/readiness endpoints.
-- Exit: web and API start together; web proxy reaches API; migration applies to local PostgreSQL; database readiness reports ready. Keep the root prototype untouched until Phase 2.
+- Next action: either have the local PostgreSQL owner provision the `chronokid` development database/user and set its connection in the ignored root `.env`, or run Compose with an available host port and matching `DATABASE_URL`; host port 5432 is currently occupied. Do not share credentials in chat.
+- Exit: web and API start together; web proxy reaches API; migration applies to the local development database; database readiness reports ready. Keep the root prototype untouched until Phase 2.
 
 ### Phase 2: Game Migration
 
