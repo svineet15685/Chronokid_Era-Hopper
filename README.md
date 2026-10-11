@@ -27,3 +27,7 @@ Stop PostgreSQL with `npm run db:down`. The existing root `index.html` remains t
 - `packages/shared`: Types shared between the browser and API.
 
 The current API only exposes health and readiness endpoints. Player identity, run persistence, scores, and leaderboard routes belong to later phases.
+
+## Project guardrails
+
+See [PLAN.md](PLAN.md) for current phase status, decisions, risks, and resume instructions. Repository-specific coding and security instructions are in `.github/copilot-instructions.md` and `.github/instructions/api-security.instructions.md`.

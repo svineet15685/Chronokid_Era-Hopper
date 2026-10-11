@@ -1,5 +1,8 @@
-import 'dotenv/config';
+import { config as loadEnv } from 'dotenv';
+import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
+
+loadEnv({ path: fileURLToPath(new URL('../../../.env', import.meta.url)) });
 
 const envSchema = z.object({
   API_HOST: z.string().default('0.0.0.0'),
