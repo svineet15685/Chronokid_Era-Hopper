@@ -6,7 +6,7 @@ Chronokid is a browser-based canvas platformer. The repository is being organize
 
 - Node.js 22 or newer
 - npm 10 or newer
-- Docker Desktop (or another Docker Compose-compatible runtime) for local PostgreSQL
+- PostgreSQL for local development: either Docker Desktop (or another Compose-compatible runtime), or a local PostgreSQL install (see below)
 
 ## Local development
 
@@ -19,6 +19,18 @@ Chronokid is a browser-based canvas platformer. The repository is being organize
 The Vite client is at `http://localhost:5173`; the API is at `http://localhost:3001`. Check API liveness at `/api/health` and database readiness at `/api/health/ready`.
 
 Stop PostgreSQL with `npm run db:down`. The existing root `index.html` remains the original playable prototype; Phase 2 will migrate its game into `apps/web`.
+
+### Local database without Docker
+
+If Docker is unavailable or port 5432 is taken by another PostgreSQL server, run a project-only cluster on port 5433 with the installed PostgreSQL binaries:
+
+1. Create the cluster once, outside the repository, with a password you choose (kept out of source control):
+   `initdb -D "%LOCALAPPDATA%\Chronokid\pgdata" -U chronokid -A scram-sha-256 -E UTF8 --pwprompt`
+2. Start it: `npm run db:local:start` (stop with `npm run db:local:stop`, check with `npm run db:local:status`).
+3. Create the database once: `createdb -h localhost -p 5433 -U chronokid chronokid`
+4. Set `DATABASE_URL=postgres://chronokid:<password>@localhost:5433/chronokid` in the root `.env`, then run `npm run db:migrate`.
+
+The script defaults to `C:\Program Files\PostgreSQL\18\bin` on Windows and `pg_ctl` on `PATH` elsewhere; override with `CHRONOKID_PG_BIN`, `CHRONOKID_PGDATA`, or `CHRONOKID_PG_PORT`. The cluster is not a Windows service, so start it again after a reboot.
 
 ## Workspace
 
