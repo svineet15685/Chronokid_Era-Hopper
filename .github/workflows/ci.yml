@@ -90,6 +90,7 @@ jobs:
           retention-days: 7
 
   database:
+    # Name kept stable: it is a required status check in the main ruleset. Also runs the API integration tests.
     name: Migrations and API readiness (PostgreSQL)
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -100,19 +101,23 @@ jobs:
         # Pinned by digest; refresh it when bumping PostgreSQL (tag kept for readability).
         image: postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
         env:
-          POSTGRES_DB: chronokid
+          # The _test suffix is required by the API integration tests, which wipe tables.
+          POSTGRES_DB: chronokid_test
           POSTGRES_USER: chronokid
           # Throwaway database that exists only for this job; not a real credential.
           POSTGRES_PASSWORD: ci-throwaway
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U chronokid -d chronokid"
+          --health-cmd "pg_isready -U chronokid -d chronokid_test"
           --health-interval 5s
           --health-timeout 3s
           --health-retries 10
     env:
-      DATABASE_URL: postgres://chronokid:ci-throwaway@localhost:5432/chronokid
+      DATABASE_URL: postgres://chronokid:ci-throwaway@localhost:5432/chronokid_test
+      TEST_DATABASE_URL: postgres://chronokid:ci-throwaway@localhost:5432/chronokid_test
+      # Fail instead of skipping if the database tests cannot find their database.
+      REQUIRE_DB_TESTS: "1"
       API_HOST: 127.0.0.1
       API_PORT: 3001
     steps:
@@ -128,8 +133,10 @@ jobs:
         run: npm run db:migrate
       - name: Re-apply migrations (must be a no-op)
         run: npm run db:migrate
-      - name: Build the API
-        run: npm run build --workspace=@chronokid/api
+      - name: API integration tests
+        run: npm run test --workspace=@chronokid/api
+      - name: Build the API (and the shared package it imports at runtime)
+        run: npm run build --workspace=@chronokid/shared --workspace=@chronokid/api
       - name: Start the built API and require readiness
         run: |
           node apps/api/dist/server.js > "$RUNNER_TEMP/api.log" 2>&1 &

@@ -44,7 +44,25 @@ The script defaults to `C:\Program Files\PostgreSQL\18\bin` on Windows and `pg_c
 - `apps/api`: Fastify API, Drizzle schema/migrations, PostgreSQL connection.
 - `packages/shared`: Types shared between the browser and API.
 
-The current API only exposes health and readiness endpoints. Player identity, run persistence, scores, and leaderboard routes belong to later phases.
+## API
+
+Guest players get a random bearer token when they pick a display name; the server stores only its SHA-256 hash. Send it as `Authorization: Bearer <token>`.
+
+| Method and path | Auth | Purpose |
+| --- | --- | --- |
+| `GET /api/health` | none | Liveness |
+| `GET /api/health/ready` | none | Database readiness (503 when the database is down) |
+| `POST /api/players` | none | Create a guest player: `{ "displayName": "Ada" }` returns the player and token. 5 per minute per IP |
+| `GET /api/players/me` | token | Profile and best finished run |
+| `POST /api/runs` | token | Start a run; the server records the start time |
+| `POST /api/runs/:runId/finish` | token, owner | `{ "score", "eraReached", "outcome" }`; the server measures the duration and rejects impossible results |
+| `GET /api/leaderboard?limit=10` | none | Each player's best finished run (1 to 50 entries); no player IDs |
+
+Errors are always `{ "error": "<code>" }` with a generic code (`invalid_request`, `unauthorized`, `not_found`, `conflict`, `rate_limited`, `unavailable`, `internal`). Requests are rate limited (120 per minute per IP overall) and bodies are capped at 4 KB. Set `TRUST_PROXY=true` only behind a trusted reverse proxy.
+
+**The leaderboard is casual.** The game runs in the browser, so the API can only reject impossible results (more points than the eras hold, a victory before era 10, runs faster than the eras allow, runs older than six hours); it cannot prove a score was earned.
+
+API integration tests run against a real PostgreSQL database named by `TEST_DATABASE_URL`. They wipe its tables, so the database name must end in `_test` (the tests refuse to run otherwise). Without `TEST_DATABASE_URL` they are skipped locally; CI sets `REQUIRE_DB_TESTS=1` so they can never be skipped there.
 
 ## CI and security checks
 
@@ -54,7 +72,7 @@ GitHub Actions runs on every pull request and every push to `main`. Nothing is d
 | --- | --- |
 | Lint, type-check, build, unit tests | oxlint, TypeScript, production builds, Vitest, and that generated migrations are committed |
 | Browser tests (desktop and mobile) | Playwright on desktop, portrait phone, and landscape phone; the HTML report is uploaded when a test fails |
-| Migrations and API readiness (PostgreSQL) | Migrations apply to an empty PostgreSQL 16 database and re-apply as a no-op; the built API starts and reports ready |
+| Migrations and API readiness (PostgreSQL) | Migrations apply to an empty PostgreSQL 16 database and re-apply as a no-op; API integration tests run against it; the built API starts and reports ready |
 | Dependency audit and signatures | No known vulnerabilities in production dependencies, no high/critical ones anywhere, and npm registry signatures verify |
 | Dependency review (pull requests) | Blocks pull requests that add dependencies with known moderate or worse vulnerabilities |
 | Workflow security lint (zizmor) | Insecure GitHub Actions patterns (unpinned actions, credential leaks, injection) |

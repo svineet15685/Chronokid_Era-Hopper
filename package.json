@@ -3,9 +3,9 @@
   "private": true,
   "type": "module",
   "workspaces": [
+    "packages/shared",
     "apps/web",
-    "apps/api",
-    "packages/shared"
+    "apps/api"
   ],
   "scripts": {
     "dev": "concurrently -k -n web,api \"npm run dev --workspace=@chronokid/web\" \"npm run dev --workspace=@chronokid/api\"",

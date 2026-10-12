@@ -1,7 +1,18 @@
 import { buildApp } from './app.js';
 import { config } from './config.js';
+import { createDatabase } from './db/index.js';
 
-const app = await buildApp();
+const app = await buildApp({
+  database: createDatabase(config.DATABASE_URL),
+  webOrigin: config.WEB_ORIGIN,
+  trustProxy: config.TRUST_PROXY
+});
+
+for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+  process.once(signal, () => {
+    void app.close().finally(() => process.exit(0));
+  });
+}
 
 try {
   await app.listen({ host: config.API_HOST, port: config.API_PORT });

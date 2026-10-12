@@ -1,3 +1,4 @@
+import { GAME_RULES } from '@chronokid/shared';
 import { describe, expect, it } from 'vitest';
 import { CHECKPOINT_X, ERAS, FLOOR, H, HAZARD_XS, SKINS, START_X, WORLD_END, type EraId } from './config';
 import { CHECKPOINT_SAFE, FINISH_SAFE, START_SAFE, levelLayout } from './level';
@@ -37,6 +38,15 @@ function clearArea(state: GameState): GameState {
   state.pickups = [];
   return state;
 }
+
+it('matches the game rules the API enforces', () => {
+  expect(ERAS).toHaveLength(GAME_RULES.eraCount);
+  for (let i = 0; i < ERAS.length; i++) {
+    const state = createGame();
+    buildLevel(state, i);
+    expect(state.pickups).toHaveLength(GAME_RULES.pickupsPerEra);
+  }
+});
 
 describe('eras', () => {
   it('has ten eras that get faster and more dangerous', () => {

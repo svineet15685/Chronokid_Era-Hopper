@@ -41,5 +41,24 @@
       }
     ],
     "unicorn/no-array-sort": "off"
-  }
+  },
+  "overrides": [
+    {
+      "files": [
+        "apps/api/**/*.ts"
+      ],
+      "rules": {
+        "oxc/no-async-endpoint-handlers": "off"
+      }
+    },
+    {
+      "files": [
+        "**/*.test.ts",
+        "**/e2e/**/*.ts"
+      ],
+      "rules": {
+        "unicorn/consistent-function-scoping": "off"
+      }
+    }
+  ]
 }

@@ -1,6 +1,7 @@
 // Pure game simulation: no DOM, audio, or canvas access, so it can be unit tested.
 // The first era keeps the original prototype's numbers and ordering.
 import { CHECKPOINT_X, ERAS, EXTRA_LIFE_POINTS, FLOOR, H, LAST_ERA, LEDGES, MAX_LIVES, PICKUP_POINTS, SKINS, START_LIVES, START_X, W, WORLD_END, type HazardKind, type ScareKind, type SkinName } from './config';
+import { GAME_RULES } from '@chronokid/shared';
 import { levelLayout, type HazardSlot } from './level';
 
 export type Phase = 'start' | 'playing' | 'clear' | 'victory' | 'gameover';
@@ -130,7 +131,7 @@ export function buildLevel(state: GameState, eraIndex: number): void {
   state.platforms = [...ground, ...ledges];
   state.hazards = layout.hazards.map(buildHazard);
   state.pickups = [];
-  for (let i = 0; i < 25; i++) {
+  for (let i = 0; i < GAME_RULES.pickupsPerEra; i++) {
     const x = 235 + i * 132;
     const ledge = LEDGES.find(([ledgeX]) => Math.abs(ledgeX + 55 - x) < 75);
     state.pickups.push({ x, y: ledge ? ledge[1] - 35 : FLOOR - 66 - (i % 3) * 18, r: 12, taken: false, phase: i * 0.6 });
