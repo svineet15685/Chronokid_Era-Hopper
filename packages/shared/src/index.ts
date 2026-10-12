@@ -1,5 +1,7 @@
 // Contracts shared by the browser and the API. Types and plain constants only: no secrets or server logic.
 
+export { NAME_ADJECTIVES, NAME_ANIMALS, generateDisplayName, isAllowedDisplayName } from './names.js';
+
 export interface ApiHealth {
   status: 'ok';
 }
@@ -22,6 +24,8 @@ export type RunOutcome = 'gameover' | 'victory';
 export interface PlayerProfile {
   id: string;
   displayName: string;
+  /** Whether the player chose to appear on the public leaderboard. */
+  listed: boolean;
 }
 
 /** POST /api/players */
@@ -34,13 +38,31 @@ export interface CreatePlayerResponse {
   token: string;
 }
 
+/** PATCH /api/players/me: rename and/or opt in to the leaderboard. Opting out is not offered yet. */
+export interface UpdatePlayerRequest {
+  displayName?: string;
+  listed?: true;
+}
+export interface UpdatePlayerResponse {
+  player: PlayerProfile;
+  /** Leaderboard position of the player's best run, when listed and they have finished a run. */
+  rank: number | null;
+}
+
 /** GET /api/players/me */
 export interface PlayerMeResponse {
   player: PlayerProfile;
   best: { score: number; eraReached: number; outcome: RunOutcome } | null;
 }
 
-/** POST /api/runs */
+/** POST /api/runs (body optional) */
+export interface StartRunRequest {
+  /**
+   * A finished run of yours that this one continues ("Retry" after a game over keeps the score).
+   * The new run is timed from the original start, so duration checks still hold.
+   */
+  continues?: string;
+}
 export interface StartRunResponse {
   runId: string;
   startedAt: string;
@@ -56,6 +78,8 @@ export interface FinishRunRequest {
 export interface FinishRunResponse {
   run: { id: string; score: number; eraReached: number; outcome: RunOutcome; durationMs: number };
   personalBest: boolean;
+  /** Leaderboard position of the player's best run, when listed. */
+  rank: number | null;
 }
 
 /** GET /api/leaderboard */

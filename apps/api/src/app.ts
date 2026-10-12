@@ -9,6 +9,22 @@ import { leaderboardRoutes } from './routes/leaderboard.js';
 import { playerRoutes } from './routes/players.js';
 import { runRoutes } from './routes/runs.js';
 
+/** Requests per minute per client IP. */
+export interface RateLimits {
+  global: number;
+  createPlayer: number;
+  updatePlayer: number;
+  runs: number;
+}
+
+export const DEFAULT_RATE_LIMITS: RateLimits = { global: 120, createPlayer: 5, updatePlayer: 10, runs: 30 };
+
+/** The default limits multiplied by `scale` (used by automated tests that make many requests from one IP). */
+export function scaleRateLimits(scale: number): RateLimits {
+  const { global, createPlayer, updatePlayer, runs } = DEFAULT_RATE_LIMITS;
+  return { global: global * scale, createPlayer: createPlayer * scale, updatePlayer: updatePlayer * scale, runs: runs * scale };
+}
+
 export interface AppOptions {
   database: Database;
   webOrigin: string;
@@ -17,18 +33,19 @@ export interface AppOptions {
   trustProxy?: boolean;
   /** Clock used for run timing; injectable for tests. */
   now?: () => Date;
+  rateLimits?: RateLimits;
 }
 
-export async function buildApp({ database, webOrigin, logger = true, trustProxy = false, now = () => new Date() }: AppOptions) {
+export async function buildApp({ database, webOrigin, logger = true, trustProxy = false, now = () => new Date(), rateLimits = DEFAULT_RATE_LIMITS }: AppOptions) {
   const { db } = database;
   const app = Fastify({ logger, trustProxy, bodyLimit: 4096 });
   registerErrorHandling(app);
 
   // A list (not a bare string) makes other origins get no CORS headers at all.
-  await app.register(cors, { origin: [webOrigin], methods: ['GET', 'POST'], allowedHeaders: ['Content-Type', 'Authorization'], maxAge: 600 });
+  await app.register(cors, { origin: [webOrigin], methods: ['GET', 'POST', 'PATCH'], allowedHeaders: ['Content-Type', 'Authorization'], maxAge: 600 });
   await app.register(rateLimit, {
     global: true,
-    max: 120,
+    max: rateLimits.global,
     timeWindow: '1 minute',
     // Thrown as an error with this status; the error handler turns it into { error: 'rate_limited' }.
     errorResponseBuilder: () => ({ statusCode: 429, error: 'rate_limited', message: 'rate limited' })
@@ -49,8 +66,8 @@ export async function buildApp({ database, webOrigin, logger = true, trustProxy 
     }
   });
 
-  playerRoutes(app, db);
-  runRoutes(app, db, now);
+  playerRoutes(app, db, rateLimits);
+  runRoutes(app, db, now, rateLimits);
   leaderboardRoutes(app, db);
 
   app.addHook('onClose', async () => {

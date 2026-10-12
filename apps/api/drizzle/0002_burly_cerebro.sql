@@ -1,0 +1,1 @@
+ALTER TABLE "players" ADD COLUMN "listed" boolean DEFAULT false NOT NULL;

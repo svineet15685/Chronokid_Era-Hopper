@@ -23,8 +23,22 @@
           <h1 id="title">Chronokid:<br /><em>Era Hopper</em></h1>
           <p class="subtitle" id="message">Dash through ten strange ages, scoop up the shiny stuff, and keep your feet out of trouble. Watch out for surprises!</p>
           <div class="controls-copy" id="instructions"><span><kbd>←</kbd> <kbd>→</kbd> move</span><span><kbd>SPACE</kbd> / <kbd>↑</kbd> jump</span><span>Collect everything you can.</span></div>
-          <button id="action">Play Game</button>
-          <button class="secondary" id="restart" hidden>Play Again</button>
+          <div class="online" id="online" aria-live="polite"></div>
+          <div class="menu-actions">
+            <button id="action">Play Game</button>
+            <button class="secondary" id="restart" hidden>Play Again</button>
+            <button class="secondary" id="leaderboard-open" type="button">🏆 Leaderboard</button>
+          </div>
+        </div>
+      </section>
+      <section class="overlay board-overlay hidden" id="board" aria-label="Leaderboard">
+        <div class="panel">
+          <div class="eyebrow">Hall of time travelers</div>
+          <h1>Leader<br /><em>board</em></h1>
+          <p class="subtitle" id="board-status" aria-live="polite">Loading…</p>
+          <ol class="board" id="board-list"></ol>
+          <div class="online" id="board-join" aria-live="polite"></div>
+          <button id="board-close" type="button">Back</button>
         </div>
       </section>
       <div class="mobile-controls" aria-label="Touch controls">

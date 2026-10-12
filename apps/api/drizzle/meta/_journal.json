@@ -15,6 +15,13 @@
       "when": 1791813057897,
       "tag": "0001_chemical_wonder_man",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791818937253,
+      "tag": "0002_burly_cerebro",
+      "breakpoints": true
     }
   ]
 }

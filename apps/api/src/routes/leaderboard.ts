@@ -1,12 +1,12 @@
 import type { LeaderboardResponse } from '@chronokid/shared';
-import { asc, desc, eq, isNotNull } from 'drizzle-orm';
+import { and, asc, desc, eq, isNotNull } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import type { Db } from '../db/index.js';
 import { players, runs } from '../db/schema.js';
 import { leaderboardQuery } from '../validation.js';
 
 export function leaderboardRoutes(app: FastifyInstance, db: Db): void {
-  // Public and casual: each player's best finished run. Player IDs are not exposed.
+  // Public and casual: each listed player's best finished run. Player IDs are not exposed.
   app.get('/api/leaderboard', async (request, reply) => {
     const { limit } = leaderboardQuery.parse(request.query);
     const best = db
@@ -19,7 +19,7 @@ export function leaderboardRoutes(app: FastifyInstance, db: Db): void {
       })
       .from(runs)
       .innerJoin(players, eq(players.id, runs.playerId))
-      .where(isNotNull(runs.completedAt))
+      .where(and(eq(players.listed, true), isNotNull(runs.completedAt)))
       .orderBy(runs.playerId, desc(runs.score), asc(runs.completedAt))
       .as('best');
     const rows = await db.select().from(best).orderBy(desc(best.score), asc(best.completedAt)).limit(limit);

@@ -24,7 +24,7 @@ Stop PostgreSQL with `npm run db:down`. The game runs from `apps/web`. The origi
 
 - `npm run lint`: oxlint (correctness and suspicious-pattern rules; warnings fail).
 - `npm test`: Vitest behavior tests for the game simulation.
-- `npm run test:e2e`: Playwright browser checks on desktop and mobile viewports. Install the browser once with `npx playwright install chromium`. They start their own Vite server on port 5174.
+- `npm run test:e2e`: Playwright browser checks on desktop and mobile viewports. Install the browser once with `npx playwright install chromium`. They start their own Vite server on port 5174 and, when `TEST_DATABASE_URL` is set, a real API on port 3101 against that `_test` database (migrated and emptied first), so the leaderboard flow is tested end to end. Without it, only the full-stack tests are skipped; offline behavior is always tested.
 
 ### Local database without Docker
 
@@ -46,17 +46,20 @@ The script defaults to `C:\Program Files\PostgreSQL\18\bin` on Windows and `pg_c
 
 ## API
 
-Guest players get a random bearer token when they pick a display name; the server stores only its SHA-256 hash. Send it as `Authorization: Bearer <token>`.
+Guest players get a random bearer token; the server stores only its SHA-256 hash. Send it as `Authorization: Bearer <token>`. The game creates an unlisted guest quietly on first play (so runs can be timed from their start) and lists the player on the leaderboard only after they opt in.
+
+Display names are picked, not typed: they must be `Adjective Animal Number` from the word lists in `packages/shared/src/names.ts` (for example `Brave Otter 27`), so nothing rude or personal can appear on the public leaderboard.
 
 | Method and path | Auth | Purpose |
 | --- | --- | --- |
 | `GET /api/health` | none | Liveness |
 | `GET /api/health/ready` | none | Database readiness (503 when the database is down) |
-| `POST /api/players` | none | Create a guest player: `{ "displayName": "Ada" }` returns the player and token. 5 per minute per IP |
+| `POST /api/players` | none | Create an unlisted guest player: `{ "displayName": "Brave Otter 27" }` returns the player and token. 5 per minute per IP |
+| `PATCH /api/players/me` | token | `{ "displayName"?, "listed": true }`: pick a new name and/or join the leaderboard; returns the player's rank |
 | `GET /api/players/me` | token | Profile and best finished run |
-| `POST /api/runs` | token | Start a run; the server records the start time |
-| `POST /api/runs/:runId/finish` | token, owner | `{ "score", "eraReached", "outcome" }`; the server measures the duration and rejects impossible results |
-| `GET /api/leaderboard?limit=10` | none | Each player's best finished run (1 to 50 entries); no player IDs |
+| `POST /api/runs` | token | Start a run; the server records the start time. `{ "continues": "<finished run id>" }` continues a run after "Retry", timed from the original start |
+| `POST /api/runs/:runId/finish` | token, owner | `{ "score", "eraReached", "outcome" }`; the server measures the duration, rejects impossible results, and returns the leaderboard rank when listed |
+| `GET /api/leaderboard?limit=10` | none | Each listed player's best finished run (1 to 50 entries); no player IDs |
 
 Errors are always `{ "error": "<code>" }` with a generic code (`invalid_request`, `unauthorized`, `not_found`, `conflict`, `rate_limited`, `unavailable`, `internal`). Requests are rate limited (120 per minute per IP overall) and bodies are capped at 4 KB. Set `TRUST_PROXY=true` only behind a trusted reverse proxy.
 

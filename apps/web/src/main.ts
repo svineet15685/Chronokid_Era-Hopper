@@ -1,3 +1,4 @@
+import type { RunOutcome } from '@chronokid/shared';
 import './style.css';
 import { createSound } from './game/audio';
 import { CHECKPOINT_X, ERAS, LAST_ERA, START_LIVES } from './game/config';
@@ -5,6 +6,8 @@ import { bindInput } from './game/input';
 import { createRenderer } from './game/render';
 import { createScareLayer } from './game/scares';
 import { advanceEra, beginGame, createGame, frameDelta, requestJump, retryEra, step, type GameState } from './game/simulation';
+import { OnlineSession } from './online/session';
+import { renderFinishResult, renderJoinPrompt, renderLeaderboard, renderNote } from './ui/online-panel';
 
 function byId<T extends HTMLElement>(id: string): T {
   const element = document.getElementById(id);
@@ -38,12 +41,23 @@ const actionButton = byId<HTMLButtonElement>('action');
 const restartButton = byId<HTMLButtonElement>('restart');
 const soundButton = byId<HTMLButtonElement>('sound');
 const scaresButton = byId<HTMLButtonElement>('scares');
+const onlineEl = byId('online');
+const leaderboardButton = byId<HTMLButtonElement>('leaderboard-open');
+const boardOverlay = byId('board');
+const boardList = byId('board-list');
+const boardStatus = byId('board-status');
+const boardJoin = byId('board-join');
+const boardClose = byId<HTMLButtonElement>('board-close');
 
 const state: GameState = createGame();
 const sound = createSound();
 const draw = createRenderer(ctx);
 const drawScareLayer = createScareLayer(byId<HTMLCanvasElement>('scare-layer'));
+const online = new OnlineSession();
 let actionHandler = start;
+/** Bumped whenever a menu changes, so slow network replies never write into a newer screen. */
+let screen = 0;
+let boardView = 0;
 
 const pad = (score: number) => String(score).padStart(4, '0');
 
@@ -67,6 +81,9 @@ function pulseHearts(): void {
 }
 
 function showOverlay(): void {
+  screen++;
+  onlineEl.replaceChildren();
+  leaderboardButton.hidden = state.phase === 'clear';
   overlay.classList.remove('hidden');
   actionButton.hidden = false;
   restartButton.hidden = true;
@@ -106,6 +123,7 @@ function showOverlay(): void {
 }
 
 function hideOverlay(): void {
+  screen++;
   overlay.classList.add('hidden');
   actionButton.blur();
   restartButton.blur();
@@ -115,6 +133,7 @@ function hideOverlay(): void {
 
 function start(): void {
   sound.start();
+  online.startRun();
   beginGame(state);
   updateHud();
   hideOverlay();
@@ -124,14 +143,54 @@ function advance(): void {
   sound.play('advance');
   advanceEra(state);
   updateHud();
-  if (state.phase === 'victory') showOverlay(); else hideOverlay();
+  if (state.phase === 'victory') {
+    showOverlay();
+    void submitRun('victory');
+  } else hideOverlay();
 }
 
 function retry(): void {
   sound.start();
+  online.continueRun();
   retryEra(state);
   updateHud();
   hideOverlay();
+}
+
+/** Sends the finished run in the background and shows the outcome on the end screen. */
+async function submitRun(outcome: RunOutcome): Promise<void> {
+  const shownOn = screen;
+  renderNote(onlineEl, 'Saving your score…');
+  const result = await online.finishRun({ score: state.score, eraReached: state.eraIndex + 1, outcome });
+  if (shownOn === screen) renderFinishResult(onlineEl, result, online);
+}
+
+const ownBoardName = () => (online.player?.listed ? online.player.displayName : null);
+
+async function refreshBoard(view: number): Promise<boolean> {
+  const entries = await online.leaderboard();
+  if (view !== boardView) return false;
+  renderLeaderboard(boardList, boardStatus, entries, ownBoardName());
+  return entries !== null;
+}
+
+async function openBoard(): Promise<void> {
+  const view = ++boardView;
+  boardStatus.textContent = 'Loading…';
+  boardList.replaceChildren();
+  boardJoin.replaceChildren();
+  boardOverlay.classList.remove('hidden');
+  boardClose.focus({ preventScroll: true });
+  const loaded = await refreshBoard(view);
+  if (loaded && view === boardView && !online.player?.listed) {
+    renderJoinPrompt(boardJoin, online, { question: 'Want to be on the leaderboard?', allowDecline: false, onDone: () => void refreshBoard(view) });
+  }
+}
+
+function closeBoard(): void {
+  boardView++;
+  boardOverlay.classList.add('hidden');
+  leaderboardButton.focus({ preventScroll: true });
 }
 
 function renderToggle(button: HTMLButtonElement, on: boolean, label: string, onText: string, offText: string): void {
@@ -141,6 +200,11 @@ function renderToggle(button: HTMLButtonElement, on: boolean, label: string, onT
 }
 
 actionButton.addEventListener('click', () => actionHandler());
+leaderboardButton.addEventListener('click', () => void openBoard());
+boardClose.addEventListener('click', closeBoard);
+window.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && !boardOverlay.classList.contains('hidden')) closeBoard();
+});
 restartButton.addEventListener('click', start);
 
 let soundOn = prefs.get('sound', true);
@@ -163,7 +227,7 @@ scaresButton.addEventListener('click', () => {
 
 const keys = bindInput(document, {
   onJump: () => requestJump(state),
-  onEnter: () => { if (state.phase === 'start') start(); }
+  onEnter: () => { if (state.phase === 'start' && boardOverlay.classList.contains('hidden')) start(); }
 });
 
 let lastTime = 0;
@@ -176,6 +240,7 @@ function frame(timestamp: number): void {
     if (event === 'scare' && state.scare) sound.scare(state.scare.kind);
     if (event === 'collect' || event === 'hit') updateHud();
     if (event === 'clear' || event === 'gameover') showOverlay();
+    if (event === 'gameover') void submitRun('gameover');
   }
   draw(state);
   drawScareLayer(state.scare);
