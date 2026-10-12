@@ -6,6 +6,9 @@ export const START_X = 75;
 export const CHECKPOINT_X = 1720;
 export const START_LIVES = 3;
 export const PICKUP_POINTS = 100;
+/** An extra life is awarded each time the score passes a multiple of this. */
+export const EXTRA_LIFE_POINTS = 2000;
+export const MAX_LIVES = 5;
 
 export type Collectible = 'berry' | 'coin' | 'core' | 'gem' | 'star' | 'candy' | 'cog';
 export type EraId = 'stone' | 'egypt' | 'viking' | 'medieval' | 'pirate' | 'west' | 'haunted' | 'steam' | 'future' | 'end';

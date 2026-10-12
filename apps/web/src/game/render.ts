@@ -1,7 +1,7 @@
 // Canvas drawing. Stone, Medieval, and Future art is ported unchanged from the prototype.
 // Jump scare creatures are drawn full screen by scares.ts; the game view only shakes.
 import { CHECKPOINT_X, ERAS, FLOOR, H, W, WORLD_END, type Era } from './config';
-import { PARTICLE_LIFE, type GameState, type Hazard, type Platform } from './simulation';
+import { PARTICLE_LIFE, POPUP_LIFE, type GameState, type Hazard, type Platform } from './simulation';
 
 const TAU = Math.PI * 2;
 /** Droppers start wobbling when the player is this close. */
@@ -477,6 +477,15 @@ export function createRenderer(ctx: CanvasRenderingContext2D): (state: GameState
     for (const p of state.particles) { ctx.globalAlpha = Math.max(0, p.life / PARTICLE_LIFE); rect(p.x - state.cameraX, p.y, 4, 4, p.color); }
     ctx.globalAlpha = 1;
     drawPlayer(state);
+    for (const popup of state.popups) {
+      ctx.globalAlpha = Math.min(1, popup.life / (POPUP_LIFE * 0.5));
+      ctx.font = '900 26px "Trebuchet MS", "Segoe UI", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.lineJoin = 'round';
+      ctx.lineWidth = 6; ctx.strokeStyle = '#13261d'; ctx.strokeText(popup.text, popup.x - state.cameraX, popup.y);
+      ctx.fillStyle = '#7dff8a'; ctx.fillText(popup.text, popup.x - state.cameraX, popup.y);
+    }
+    ctx.globalAlpha = 1;
     if (state.phase === 'playing') {
       const progress = Math.min(1, state.player.x / WORLD_END);
       rect(0, H - 4, W * progress, 4, era.accent);

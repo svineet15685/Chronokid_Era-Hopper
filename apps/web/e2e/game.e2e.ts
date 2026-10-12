@@ -200,6 +200,20 @@ test('jump scares fill the screen, and the toggle turns them off (remembered aft
   expect(await page.evaluate(() => window.__chronokid.state.scare)).toBeNull();
 });
 
+test('passing 2,000 points awards an extra heart', async ({ page }, testInfo) => {
+  await startGame(page, isTouch(testInfo.project.name));
+  await page.evaluate(() => {
+    const { state } = window.__chronokid;
+    state.score = 1900;
+    state.player.invulnerable = 5;
+    const pickup = state.pickups[0];
+    state.player.x = pickup.x - 10;
+    state.player.y = pickup.y - 10;
+  });
+  await expect(page.locator('#hearts')).toHaveText('♥♥♥♥');
+  await expect(page.locator('#score')).toHaveText('2000');
+});
+
 test('sound toggle switches state', async ({ page }) => {
   const sound = page.locator('#sound');
   await sound.click();
