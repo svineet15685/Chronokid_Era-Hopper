@@ -19,7 +19,7 @@
 
 - `apps/web`: Vite and TypeScript browser client; keep the game loop and rendering client-side.
 - `apps/api`: Fastify API, Zod environment/request validation, Drizzle, and PostgreSQL.
-- `packages/shared`: types/contracts safe to share with the browser; never put secrets or server-only logic here.
+- `packages/shared`: types/contracts safe to share with the browser; never put secrets or server-only logic here. It is compiled to `dist/` for Node at runtime; Vite, Vitest, and the API dev server read `src/` through the `source` export condition. Anything that runs the built API must build `@chronokid/shared` first.
 - The game lives in `apps/web`. The original single-file prototype (root `index.html`) was deleted after the migration was verified; recover it from git history (`git show ffd243e:index.html`) if needed.
 - Use Node.js 22+ and npm workspaces. Main checks: `npm run lint`, `npm run typecheck`, `npm run build`, `npm run test`, `npm run test:e2e`, and `npm run db:generate`. CI (`.github/workflows/ci.yml`, `codeql.yml`) runs these plus database, dependency, and workflow security jobs; keep its actions pinned to full commit SHAs with read-only default permissions, and never add deployment steps without the user's approval.
 - Database commands require local PostgreSQL: `npm run db:up`, then `npm run db:migrate`. Review generated SQL before applying schema changes; do not apply migrations to shared or production databases without explicit authorization.

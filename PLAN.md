@@ -71,11 +71,17 @@ Status: complete (2026-10-12), committed as `1afa749`; playtested and approved b
 
 ### Phase 3: Persistence API
 
-Status: not started
+Status: implemented on branch `phase-3-persistence-api` (2026-10-12); pending commit, CI, and review
 
 - Add guest identity, run lifecycle, validated result submission, and leaderboard persistence using the existing `players` and `runs` schema as a starting point; revise schema through reviewed migrations.
 - Enforce input bounds, ownership, rate limits, generic errors, and persistence tests. Treat client results as casual, not cheat-proof.
 - Exit: API integration tests cover success, malformed input, unauthorized access, and database failures; migrations apply cleanly.
+- Built: guest players with a random 256-bit bearer token (only its SHA-256 is stored); run start/finish with server-measured duration and plausibility checks (score multiple of 100 and at most 2,500 per era reached, victory only in era 10, at least 8 s per era crossed, finish within 6 h, finish once, owner only with 404 for others); leaderboard of each player's best finished run without player IDs. Rate limits (120/min global, 5/min player creation, 30/min run calls), 4 KB body limit, list-based CORS, `no-store`/`nosniff` headers, generic error codes, 503 when the database is unreachable.
+- Migration `0001` adds `players.token_hash` (NOT NULL, unique), the `run_outcome` enum, nullable `duration_ms`, check constraints, and leaderboard indexes. Adding NOT NULL `token_hash` only works on an empty `players` table (true for every environment so far); any populated database would need a backfill plan first.
+- `GAME_RULES` in `packages/shared` is the single source for era count, pickups per era, and pickup points, used by the game and the API. Because the API imports runtime values from it, `shared` now builds to `dist/` and exposes a `source` export condition for dev tools. The CI readiness step caught the missing build before merge.
+- Verified (2026-10-12): 62 API tests (32 validation unit tests and 30 integration tests against PostgreSQL, including the database-down case), 77 web unit tests, type-check, lint, and a production smoke test of the built API. CI's database job now runs the API integration tests with `REQUIRE_DB_TESTS=1`.
+- Known limits: display names are character-restricted but not moderated (no profanity filter); rate limits are in memory, so they reset on restart and are per instance. Revisit both before public release.
+- Next action: Phase 4 client integration (name entry, run submission, leaderboard view, offline handling).
 
 ### Phase 4: Client Integration
 

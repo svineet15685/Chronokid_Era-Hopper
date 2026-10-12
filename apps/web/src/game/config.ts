@@ -1,3 +1,5 @@
+import { GAME_RULES } from '@chronokid/shared';
+
 export const W = 960;
 export const H = 540;
 export const FLOOR = 462;
@@ -5,7 +7,8 @@ export const WORLD_END = 3440;
 export const START_X = 75;
 export const CHECKPOINT_X = 1720;
 export const START_LIVES = 3;
-export const PICKUP_POINTS = 100;
+/** Shared with the API, which uses it to sanity-check submitted scores. */
+export const PICKUP_POINTS = GAME_RULES.pickupPoints;
 /** An extra life is awarded each time the score passes a multiple of this. */
 export const EXTRA_LIFE_POINTS = 2000;
 export const MAX_LIVES = 5;
