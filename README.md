@@ -39,7 +39,7 @@ The script defaults to `C:\Program Files\PostgreSQL\18\bin` on Windows and `pg_c
 
 ## Workspace
 
-- `apps/web`: Vite + TypeScript canvas game (`src/game/`), with `/api` proxied to the API in development.
+- `apps/web`: Vite + TypeScript canvas game (`src/game/`): ten eras defined in `config.ts`, generated layouts in `level.ts`, the pure `simulation.ts`, and canvas art in `render.ts` and `scares.ts`. `/api` is proxied to the API in development.
 - `apps/api`: Fastify API, Drizzle schema/migrations, PostgreSQL connection.
 - `packages/shared`: Types shared between the browser and API.
 

@@ -13,7 +13,8 @@ Last reviewed: 2026-10-12
 
 - Phase 0 guardrails: complete. Shared instructions, API security rules, resumable plan, CI, Dependabot, and read-only code review agent are in place. Type-check, production build, migration drift check, audit threshold, and env ignore checks passed.
 - Phase 1 foundation: complete (2026-10-11). Docker is unavailable and port 5432 belongs to an unrelated PostgreSQL 18 service, so development uses a project-only PostgreSQL 18 cluster created with `initdb` at `%LOCALAPPDATA%\Chronokid\pgdata` on `localhost:5433` (`npm run db:local:start|stop|status`). Its randomly generated password exists only in the ignored root `.env`. Migration `0000_legal_praxagora` is applied. The cluster is not a Windows service; start it after reboots.
-- Phase 2 game migration: migration and automated exit checks complete (2026-10-12); awaiting a hands-on playtest and the user's decision on the root prototype (remove or archive). The prototype is untouched.
+- Phase 2 game migration: complete and committed (`ffd243e`, branch `phase-2-game-migration`). The root prototype is still untouched; its removal or archiving is undecided.
+- Phase 2b ten-era expansion (user-requested scope change, 2026-10-12): implemented on the same branch, uncommitted, pending playtest. See the Phase 2b section.
 - Phase 1 recheck (2026-10-12) after Dependabot major upgrades (TypeScript 7, Vite 8, Zod 4, dotenv 18, @fastify/cors 11, @types/node 26): clean install, type-check, build, high-severity audit, migration drift, and `/api/health/ready` all pass.
 - Stack: npm workspaces, Vite + TypeScript client, Fastify + TypeScript API, PostgreSQL + Drizzle, shared TypeScript contracts.
 - Security posture: browser gameplay is untrusted/client-authoritative; a leaderboard is casual unless gameplay becomes server-authoritative or runs are independently verified.
@@ -55,6 +56,17 @@ Status: migration complete; pending playtest and prototype disposition
   - [x] Intentional fixes: (1) portrait start-button clipping; (2) the controls hint is now hidden on non-start overlays as the prototype code intended (its CSS overrode `hidden`); (3) losing the last life and reaching the finish in the same frame now stays a game over instead of clearing the era; (4) overlay titles are built with DOM nodes instead of `innerHTML`.
   - [ ] Hands-on playtest of a full run by the user (feel/timing), then decide the root `index.html` disposition.
 - Next action: playtest `npm run dev --workspace=@chronokid/web` at http://localhost:5173 on desktop and a phone, then choose to delete or archive the root prototype and mark Phase 2 complete.
+
+### Phase 2b: Ten-Era Expansion
+
+Status: implemented; pending playtest and commit
+
+- Requested by the user after their child played Phase 2: ten eras, each harder, with jump scares. Decisions: "spooky-silly" scares with an on/off toggle; timeline lineup Stone Age, Ancient Egypt, Viking Age, Medieval, Pirate, Wild West, Haunted Manor, Steam Age, Future, End of Time; mid-level checkpoints.
+- Stone Age keeps the original layout and physics. Later eras raise hazard tempo, add pits (0 to 5), hazard counts (9 to 15), crumbling ledges (Egypt, Haunted, End), ice (Viking), droppers, and projectiles. Layouts come from `apps/web/src/game/level.ts` (ground slots for pits and ground hazards, air hazards halfway between).
+- Checkpoint flag at x=1720: falling into a pit costs a life and respawns at the last checkpoint and restores crumbled ledges. Game over offers "Retry Era"/"Retry from Checkpoint" (full lives, the era's starting score) or "Start Over". Retry-on-game-over was added beyond the chosen option because ten harder eras without it would strand young players.
+- Jump scares (`scares.ts`): one to three per era; the world freezes for 1.1 s while a cartoon creature pops up over the whole screen (a separate viewport-sized canvas) with a shake, flash, and synthesized sound. No captions, by user request. The 👻 toggle and the sound toggle persist in `localStorage` (failures fall back to defaults). Scare spots passed while scares are off are consumed.
+- Verified (2026-10-12): 75 Vitest tests (including per-era fairness checks: pits narrower than 70% of the era's jump distance, clear start/checkpoint/finish, no ground hazard swaying into a pit), 25 Playwright checks on desktop and both mobile orientations, type-check, and build. All ten eras and scare creatures were visually reviewed in contact sheets.
+- Next action: playtest all ten eras (especially difficulty in Steam, Future, and End of Time), tune `tempo`, `spacing`, `pits`, and `pitWidth` in `config.ts` if needed, then commit.
 
 ### Phase 3: Persistence API
 
