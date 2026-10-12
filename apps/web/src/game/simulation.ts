@@ -1,10 +1,10 @@
 // Pure game simulation: no DOM, audio, or canvas access, so it can be unit tested.
 // The first era keeps the original prototype's numbers and ordering.
-import { CHECKPOINT_X, ERAS, FLOOR, H, LAST_ERA, LEDGES, PICKUP_POINTS, SKINS, START_LIVES, START_X, W, WORLD_END, type HazardKind, type ScareKind, type SkinName } from './config';
+import { CHECKPOINT_X, ERAS, EXTRA_LIFE_POINTS, FLOOR, H, LAST_ERA, LEDGES, MAX_LIVES, PICKUP_POINTS, SKINS, START_LIVES, START_X, W, WORLD_END, type HazardKind, type ScareKind, type SkinName } from './config';
 import { levelLayout, type HazardSlot } from './level';
 
 export type Phase = 'start' | 'playing' | 'clear' | 'victory' | 'gameover';
-export type GameEvent = 'jump' | 'collect' | 'hit' | 'clear' | 'gameover' | 'checkpoint' | 'scare';
+export type GameEvent = 'jump' | 'collect' | 'extraLife' | 'hit' | 'clear' | 'gameover' | 'checkpoint' | 'scare';
 
 export interface Box { x: number; y: number; w: number; h: number }
 
@@ -44,6 +44,8 @@ export interface Hazard extends Box {
 
 export interface Pickup { x: number; y: number; r: number; taken: boolean; phase: number }
 export interface Particle { x: number; y: number; vx: number; vy: number; life: number; color: string }
+/** Floating text such as "+1 ♥" that drifts up and fades. */
+export interface Popup { x: number; y: number; text: string; life: number }
 export interface Scare { kind: ScareKind; t: number }
 
 export interface GameState {
@@ -66,11 +68,13 @@ export interface GameState {
   hazards: Hazard[];
   pickups: Pickup[];
   particles: Particle[];
+  popups: Popup[];
 }
 
 export interface MoveInput { left: boolean; right: boolean }
 
 export const PARTICLE_LIFE = 0.4;
+export const POPUP_LIFE = 1.2;
 export const SCARE_TIME = 1.1;
 export const CRUMBLE_TIME = 0.5;
 export const DROPPER_TOP = 60;
@@ -132,6 +136,7 @@ export function buildLevel(state: GameState, eraIndex: number): void {
     state.pickups.push({ x, y: ledge ? ledge[1] - 35 : FLOOR - 66 - (i % 3) * 18, r: 12, taken: false, phase: i * 0.6 });
   }
   state.particles = [];
+  state.popups = [];
   state.player = createPlayer();
   state.cameraX = 0;
   state.checkpointX = START_X;
@@ -336,8 +341,14 @@ export function step(state: GameState, input: MoveInput, dt: number, random: () 
   for (const pickup of state.pickups) {
     if (!pickup.taken && overlaps(player, { x: pickup.x - pickup.r, y: pickup.y - pickup.r, w: pickup.r * 2, h: pickup.r * 2 })) {
       pickup.taken = true;
+      const before = state.score;
       state.score += PICKUP_POINTS;
       events.push('collect');
+      if (Math.floor(state.score / EXTRA_LIFE_POINTS) > Math.floor(before / EXTRA_LIFE_POINTS) && state.lives < MAX_LIVES) {
+        state.lives++;
+        events.push('extraLife');
+        state.popups.push({ x: player.x + player.w / 2, y: player.y - 12, text: '+1 ♥', life: POPUP_LIFE });
+      }
       for (let i = 0; i < 5; i++) {
         state.particles.push({ x: pickup.x, y: pickup.y, vx: (random() - 0.5) * 150, vy: -random() * 180, life: PARTICLE_LIFE, color: era.accent });
       }
@@ -351,6 +362,11 @@ export function step(state: GameState, input: MoveInput, dt: number, random: () 
     p.life -= dt;
   }
   state.particles = state.particles.filter(p => p.life > 0);
+  for (const popup of state.popups) {
+    popup.y -= 45 * dt;
+    popup.life -= dt;
+  }
+  state.popups = state.popups.filter(p => p.life > 0);
   state.cameraX = Math.max(0, Math.min(WORLD_END - W, player.x - W * 0.32));
 
   if (state.phase !== 'playing') return events;

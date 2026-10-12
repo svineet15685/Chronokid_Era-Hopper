@@ -1,7 +1,7 @@
 // Synthesized sound effects; no external audio assets.
 import type { ScareKind } from './config';
 
-export type SoundName = 'jump' | 'collect' | 'hit' | 'advance' | 'checkpoint';
+export type SoundName = 'jump' | 'collect' | 'extraLife' | 'hit' | 'advance' | 'checkpoint';
 
 declare global {
   interface Window { webkitAudioContext?: typeof AudioContext }
@@ -82,6 +82,7 @@ export function createSound() {
     if (name === 'collect') { tone(620, 0.08, 'sine', 0.045, 920); setTimeout(() => tone(920, 0.1, 'sine', 0.035, 1120), 55); }
     if (name === 'hit') tone(180, 0.25, 'sawtooth', 0.05, 65);
     if (name === 'advance') { tone(440, 0.1, 'triangle', 0.035, 660); setTimeout(() => tone(660, 0.16, 'triangle', 0.04, 880), 90); }
+    if (name === 'extraLife') [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.12, 'square', 0.04, f, i * 0.08));
     if (name === 'checkpoint') { tone(523, 0.1, 'triangle', 0.04); tone(659, 0.1, 'triangle', 0.04, 659, 0.09); tone(784, 0.18, 'triangle', 0.045, 784, 0.18); }
   }
 

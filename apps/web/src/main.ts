@@ -59,6 +59,13 @@ function updateHud(): void {
   eraEl.textContent = `${state.eraIndex + 1}/${ERAS.length} ${ERAS[state.eraIndex].name}`;
 }
 
+/** Briefly enlarges the hearts so an extra life is noticeable. */
+function pulseHearts(): void {
+  heartsEl.classList.remove('pulse');
+  void heartsEl.offsetWidth; // restart the animation if it is already running
+  heartsEl.classList.add('pulse');
+}
+
 function showOverlay(): void {
   overlay.classList.remove('hidden');
   actionButton.hidden = false;
@@ -164,7 +171,8 @@ function frame(timestamp: number): void {
   const dt = frameDelta(timestamp, lastTime);
   lastTime = timestamp;
   for (const event of step(state, keys, dt)) {
-    if (event === 'jump' || event === 'collect' || event === 'hit' || event === 'checkpoint') sound.play(event);
+    if (event === 'jump' || event === 'collect' || event === 'extraLife' || event === 'hit' || event === 'checkpoint') sound.play(event);
+    if (event === 'extraLife') pulseHearts();
     if (event === 'scare' && state.scare) sound.scare(state.scare.kind);
     if (event === 'collect' || event === 'hit') updateHud();
     if (event === 'clear' || event === 'gameover') showOverlay();

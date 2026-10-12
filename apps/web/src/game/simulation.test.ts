@@ -186,6 +186,32 @@ describe('pickups and damage', () => {
     expect(state.particles).toHaveLength(5);
   });
 
+  it('awards an extra life each time the score passes 2,000, up to five lives', () => {
+    const state = playing();
+    state.hazards = [];
+    const collectNext = () => {
+      const pickup = state.pickups.find(p => !p.taken);
+      if (!pickup) throw new Error('no pickups left');
+      state.player.x = pickup.x - 10;
+      state.player.y = pickup.y - 10;
+      return step(state, idle, DT, fixedRandom);
+    };
+    state.score = 1800;
+    expect(collectNext()).not.toContain('extraLife');
+    expect(collectNext()).toContain('extraLife');
+    expect(state).toMatchObject({ score: 2000, lives: 4 });
+    expect(state.popups).toEqual([expect.objectContaining({ text: '+1 ♥' })]);
+    run(state, idle, 90);
+    expect(state.popups).toEqual([]);
+
+    state.score = 3900;
+    expect(collectNext()).toContain('extraLife');
+    expect(state.lives).toBe(5);
+    state.score = 5900;
+    expect(collectNext()).not.toContain('extraLife');
+    expect(state).toMatchObject({ score: 6000, lives: 5 });
+  });
+
   it('loses a life on a hazard, then is briefly invulnerable', () => {
     const state = playing('medieval');
     state.pickups = [];
