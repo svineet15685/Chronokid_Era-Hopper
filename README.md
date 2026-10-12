@@ -18,7 +18,7 @@ Chronokid is a browser-based canvas platformer. The repository is being organize
 
 The Vite client is at `http://localhost:5173`; the API is at `http://localhost:3001`. Check API liveness at `/api/health` and database readiness at `/api/health/ready`.
 
-Stop PostgreSQL with `npm run db:down`. The game now runs from `apps/web`; the root `index.html` is the original prototype, kept until its removal or archiving is decided.
+Stop PostgreSQL with `npm run db:down`. The game runs from `apps/web`. The original single-file prototype (root `index.html`) was deleted after the migration was verified; recover it from git history (`git show ffd243e:index.html`) if needed.
 
 ### Tests
 
