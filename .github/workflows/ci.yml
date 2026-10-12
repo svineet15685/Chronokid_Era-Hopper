@@ -23,6 +23,11 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run build
+      - run: npm test
+      - name: Browser checks
+        run: |
+          npx playwright install --with-deps chromium
+          npm run test:e2e
       - run: npm audit --audit-level=high
       - name: Check generated database migrations
         run: |

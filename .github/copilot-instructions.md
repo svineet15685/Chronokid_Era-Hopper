@@ -21,9 +21,9 @@
 - `apps/api`: Fastify API, Zod environment/request validation, Drizzle, and PostgreSQL.
 - `packages/shared`: types/contracts safe to share with the browser; never put secrets or server-only logic here.
 - `index.html` at the repository root is the original playable prototype. Preserve it while migrating the game into `apps/web` in Phase 2; do not delete it until the migration is verified and the user approves the disposition.
-- Use Node.js 22+ and npm workspaces. Main checks: `npm run typecheck`, `npm run build`, `npm run test`, and `npm run db:generate`.
+- Use Node.js 22+ and npm workspaces. Main checks: `npm run typecheck`, `npm run build`, `npm run test`, `npm run test:e2e`, and `npm run db:generate`.
 - Database commands require local PostgreSQL: `npm run db:up`, then `npm run db:migrate`. Review generated SQL before applying schema changes; do not apply migrations to shared or production databases without explicit authorization.
-- There is not yet a meaningful automated test suite. Add behavior tests with the first gameplay/API feature; do not report the placeholder test command as test coverage.
+- Game behavior is covered by Vitest tests on the pure simulation (`apps/web/src/game/simulation.test.ts`) and Playwright browser checks (`apps/web/e2e`). Keep gameplay rules in the simulation so they stay unit-testable. The API has no tests yet; add them with the first API feature.
 
 ## Change discipline
 

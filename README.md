@@ -18,7 +18,12 @@ Chronokid is a browser-based canvas platformer. The repository is being organize
 
 The Vite client is at `http://localhost:5173`; the API is at `http://localhost:3001`. Check API liveness at `/api/health` and database readiness at `/api/health/ready`.
 
-Stop PostgreSQL with `npm run db:down`. The existing root `index.html` remains the original playable prototype; Phase 2 will migrate its game into `apps/web`.
+Stop PostgreSQL with `npm run db:down`. The game now runs from `apps/web`; the root `index.html` is the original prototype, kept until its removal or archiving is decided.
+
+### Tests
+
+- `npm test`: Vitest behavior tests for the game simulation.
+- `npm run test:e2e`: Playwright browser checks on desktop and mobile viewports. Install the browser once with `npx playwright install chromium`. They start their own Vite server on port 5174.
 
 ### Local database without Docker
 
@@ -34,7 +39,7 @@ The script defaults to `C:\Program Files\PostgreSQL\18\bin` on Windows and `pg_c
 
 ## Workspace
 
-- `apps/web`: Vite + TypeScript client shell, with `/api` proxied to the API in development.
+- `apps/web`: Vite + TypeScript canvas game (`src/game/`), with `/api` proxied to the API in development.
 - `apps/api`: Fastify API, Drizzle schema/migrations, PostgreSQL connection.
 - `packages/shared`: Types shared between the browser and API.
 

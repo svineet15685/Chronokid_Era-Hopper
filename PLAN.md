@@ -1,6 +1,6 @@
 # Chronokid: Era Hopper Project Plan
 
-Last reviewed: 2026-10-11
+Last reviewed: 2026-10-12
 
 ## Resume First
 
@@ -13,12 +13,13 @@ Last reviewed: 2026-10-11
 
 - Phase 0 guardrails: complete. Shared instructions, API security rules, resumable plan, CI, Dependabot, and read-only code review agent are in place. Type-check, production build, migration drift check, audit threshold, and env ignore checks passed.
 - Phase 1 foundation: complete (2026-10-11). Docker is unavailable and port 5432 belongs to an unrelated PostgreSQL 18 service, so development uses a project-only PostgreSQL 18 cluster created with `initdb` at `%LOCALAPPDATA%\Chronokid\pgdata` on `localhost:5433` (`npm run db:local:start|stop|status`). Its randomly generated password exists only in the ignored root `.env`. Migration `0000_legal_praxagora` is applied. The cluster is not a Windows service; start it after reboots.
-- Phase 2 game migration: next; not started. Preserve all prototype behavior and keep the root prototype recoverable until migration parity is demonstrated.
+- Phase 2 game migration: migration and automated exit checks complete (2026-10-12); awaiting a hands-on playtest and the user's decision on the root prototype (remove or archive). The prototype is untouched.
+- Phase 1 recheck (2026-10-12) after Dependabot major upgrades (TypeScript 7, Vite 8, Zod 4, dotenv 18, @fastify/cors 11, @types/node 26): clean install, type-check, build, high-severity audit, migration drift, and `/api/health/ready` all pass.
 - Stack: npm workspaces, Vite + TypeScript client, Fastify + TypeScript API, PostgreSQL + Drizzle, shared TypeScript contracts.
 - Security posture: browser gameplay is untrusted/client-authoritative; a leaderboard is casual unless gameplay becomes server-authoritative or runs are independently verified.
-- Known dependency note: production dependencies audited clean; the full audit reports four moderate findings in Drizzle Kit's development-only legacy esbuild loader. CI blocks high/critical advisories. Recheck before release and do not force unsafe major downgrades merely to silence the report.
+- Known dependency note: `npm audit` reported 0 vulnerabilities on 2026-10-12 (earlier moderate Drizzle Kit dev-only findings no longer appear). CI blocks high/critical advisories. Recheck before release.
 - Environment note: `.env.example` is the safe local template. API runtime and Drizzle CLI load the root `.env`; local `.env` files are ignored by Git.
-- Review finding to carry into Phase 2: at a 375x667 portrait viewport, the prototype's start button is clipped below the game shell. Fix responsive start-screen sizing before calling the migrated game playable on mobile.
+- Resolved in Phase 2: at 375x667 portrait the prototype clipped its start button below the 16:9 shell. Portrait layouts now give menus and touch controls the full viewport; a browser check asserts every menu button is fully in view.
 
 ## Phases and Exit Checks
 
@@ -40,11 +41,20 @@ Status: complete (2026-10-11)
 
 ### Phase 2: Game Migration
 
-Status: not started
+Status: migration complete; pending playtest and prototype disposition
 
 - Migrate the existing canvas gameplay into `apps/web` without changing the three eras, movement/jump controls, hazards, collectibles, sound, transitions, or end states unintentionally.
 - Add behavior tests for physics/state transitions and browser checks for start, movement, era progression, and restart. Provide keyboard and touch controls with responsive layout.
 - Exit: parity checklist passes, production build works, browser checks pass on desktop and mobile, and only then decide whether the root prototype can be removed or retained as an archive.
+- Structure: `apps/web/src/game/` holds `config` (eras, level layout), `simulation` (pure state/physics, unit tested), `render` (canvas), `audio`, and `input`; `src/main.ts` wires the HUD, overlays, and frame loop. A development-only `window.__chronokid` hook lets browser checks warp the player; production builds strip it (verified).
+- Verified (2026-10-12): `npm test` 20 Vitest behavior tests pass; `npm run test:e2e` 19 Playwright checks pass across desktop 1280x720, mobile portrait 375x667 (touch), and mobile landscape 915x412 (touch); type-check and production build pass; CI now runs both suites.
+- Parity checklist:
+  - [x] Constants, era physics (gravity/speed/jump), level layout, hazards, pickups, scoring, lives, invulnerability, knockback, coyote time, jump buffer, camera, and frame-delta clamp copied unchanged (unit tested).
+  - [x] Rendering ported line for line; start-screen canvas output is byte-identical to the prototype at desktop, portrait, and landscape sizes. Stone, Medieval, and Future eras visually checked in-game.
+  - [x] Keyboard (arrows, WASD, Space/Up/W jump, Enter to start) and touch (left/right hold, jump tap) controls; sound effects and toggle; overlays for start, era clear, victory, game over, and restart.
+  - [x] Intentional fixes: (1) portrait start-button clipping; (2) the controls hint is now hidden on non-start overlays as the prototype code intended (its CSS overrode `hidden`); (3) losing the last life and reaching the finish in the same frame now stays a game over instead of clearing the era; (4) overlay titles are built with DOM nodes instead of `innerHTML`.
+  - [ ] Hands-on playtest of a full run by the user (feel/timing), then decide the root `index.html` disposition.
+- Next action: playtest `npm run dev --workspace=@chronokid/web` at http://localhost:5173 on desktop and a phone, then choose to delete or archive the root prototype and mark Phase 2 complete.
 
 ### Phase 3: Persistence API
 
