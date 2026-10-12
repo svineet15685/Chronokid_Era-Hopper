@@ -84,11 +84,10 @@ describe.each(ERAS.map((era, i) => [era.id, era, i] as const))('%s layout', (_id
   it('never puts ground hazards in or swaying into pits', () => {
     const state = createGame();
     buildLevel(state, ERAS.indexOf(era));
-    for (const hazard of state.hazards) {
+    const onGround = state.hazards.filter(h => h.kind === 'roller' || h.kind === 'spikes' || h.kind === 'beam');
+    for (const hazard of onGround) {
       const reach = hazard.kind === 'roller' ? hazard.range : 0;
-      if (hazard.kind === 'roller' || hazard.kind === 'spikes' || hazard.kind === 'beam') {
-        expect(pitHits(hazard.baseX - reach, hazard.baseX + hazard.w + reach)).toBe(false);
-      }
+      expect(pitHits(hazard.baseX - reach, hazard.baseX + hazard.w + reach)).toBe(false);
     }
   });
 
@@ -264,14 +263,15 @@ describe('pickups and damage', () => {
   });
 });
 
-describe('pits and checkpoints', () => {
-  function fallIntoPit(state: GameState): GameEvent[] {
-    const pit = levelLayout(ERAS[state.eraIndex]).pits[0];
-    state.player.x = pit.x + pit.w / 2 - state.player.w / 2;
-    state.player.vx = 0;
-    return run(state, idle, 60);
-  }
+/** Drops the player into the era's first pit and lets them fall. */
+function fallIntoPit(state: GameState): GameEvent[] {
+  const pit = levelLayout(ERAS[state.eraIndex]).pits[0];
+  state.player.x = pit.x + pit.w / 2 - state.player.w / 2;
+  state.player.vx = 0;
+  return run(state, idle, 60);
+}
 
+describe('pits and checkpoints', () => {
   it('costs a life and respawns at the era start before the checkpoint', () => {
     const state = clearArea(playing('viking'));
     expect(levelLayout(ERAS[state.eraIndex]).pits[0].x).toBeLessThan(CHECKPOINT_X);

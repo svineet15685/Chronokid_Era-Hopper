@@ -17,6 +17,22 @@ async function startGame(page: Page, touch: boolean): Promise<void> {
 
 const playerX = (page: Page) => page.evaluate(() => window.__chronokid.state.player.x);
 
+/**
+ * Holds a control until the player has moved `distance` pixels (negative means left), then releases it.
+ * Waiting on the game state (not a fixed delay) keeps this reliable on slow CI machines.
+ */
+async function holdUntilMoved(page: Page, press: () => Promise<void>, release: () => Promise<void>, distance: number): Promise<void> {
+  const start = await playerX(page);
+  await press();
+  try {
+    const moved = expect.poll(async () => (await playerX(page)) - start, { timeout: 10_000 });
+    if (distance > 0) await moved.toBeGreaterThan(distance);
+    else await moved.toBeLessThan(distance);
+  } finally {
+    await release();
+  }
+}
+
 /** Puts the player just short of the finish flag so the next frames clear the era. */
 async function warpToFinish(page: Page): Promise<void> {
   await page.evaluate(end => {
@@ -41,33 +57,19 @@ test('start screen shows the title, controls, and a fully visible play button', 
 test('player moves right and left', async ({ page }, testInfo) => {
   const touch = isTouch(testInfo.project.name);
   await startGame(page, touch);
-  const start = await playerX(page);
 
   if (touch) {
-    const hold = async (control: string) => {
-      const box = await page.locator(`[data-control="${control}"]`).boundingBox();
-      if (!box) throw new Error(`No ${control} control`);
+    const control = async (name: string) => {
+      const box = await page.locator(`[data-control="${name}"]`).boundingBox();
+      if (!box) throw new Error(`No ${name} control`);
       await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-      await page.mouse.down();
-      await page.waitForTimeout(400);
-      await page.mouse.up();
     };
     await expect(page.locator('[data-control="right"]')).toBeInViewport({ ratio: 1 });
-    await hold('right');
-    const moved = await playerX(page);
-    expect(moved).toBeGreaterThan(start + 40);
-    await hold('left');
-    expect(await playerX(page)).toBeLessThan(moved - 40);
+    await holdUntilMoved(page, async () => { await control('right'); await page.mouse.down(); }, () => page.mouse.up(), 40);
+    await holdUntilMoved(page, async () => { await control('left'); await page.mouse.down(); }, () => page.mouse.up(), -40);
   } else {
-    await page.keyboard.down('ArrowRight');
-    await page.waitForTimeout(400);
-    await page.keyboard.up('ArrowRight');
-    const moved = await playerX(page);
-    expect(moved).toBeGreaterThan(start + 40);
-    await page.keyboard.down('KeyA');
-    await page.waitForTimeout(400);
-    await page.keyboard.up('KeyA');
-    expect(await playerX(page)).toBeLessThan(moved - 40);
+    await holdUntilMoved(page, () => page.keyboard.down('ArrowRight'), () => page.keyboard.up('ArrowRight'), 40);
+    await holdUntilMoved(page, () => page.keyboard.down('KeyA'), () => page.keyboard.up('KeyA'), -40);
   }
 });
 
@@ -76,8 +78,18 @@ test('jump leaves the ground', async ({ page }, testInfo) => {
   await startGame(page, touch);
   await page.waitForTimeout(200);
   const groundY = await page.evaluate(() => window.__chronokid.state.player.y);
+  // Watch every frame inside the page: a jump is airborne for well under a second, which polling can miss.
+  const rose = page.evaluate(target => new Promise<boolean>(resolve => {
+    const deadline = performance.now() + 5000;
+    const tick = () => {
+      if (window.__chronokid.state.player.y < target) resolve(true);
+      else if (performance.now() > deadline) resolve(false);
+      else requestAnimationFrame(tick);
+    };
+    tick();
+  }), groundY - 30);
   if (touch) await page.locator('[data-control="jump"]').tap(); else await page.keyboard.press('Space');
-  await expect.poll(() => page.evaluate(() => window.__chronokid.state.player.y)).toBeLessThan(groundY - 30);
+  expect(await rose).toBe(true);
 });
 
 test('Enter starts the game from the start screen', async ({ page }, testInfo) => {
@@ -154,12 +166,24 @@ test('retry after the checkpoint resumes at the checkpoint', async ({ page }, te
 
 test('jump scares fill the screen, and the toggle turns them off (remembered after reload)', async ({ page }, testInfo) => {
   await startGame(page, isTouch(testInfo.project.name));
+  // Capture the layer inside the page on the first frame the scare shows; it only lasts about a second.
+  const seen = page.evaluate(() => new Promise<{ kind: string; display: string; x: number; y: number; width: number; height: number; vw: number; vh: number }>(resolve => {
+    const layer = document.getElementById('scare-layer');
+    const tick = () => {
+      const { scare } = window.__chronokid.state;
+      if (scare && layer && !layer.hidden) {
+        const r = layer.getBoundingClientRect();
+        resolve({ kind: scare.kind, display: getComputedStyle(layer).display, x: r.x, y: r.y, width: r.width, height: r.height, vw: innerWidth, vh: innerHeight });
+      } else requestAnimationFrame(tick);
+    };
+    tick();
+  }));
   await page.evaluate(() => { const { state } = window.__chronokid; state.player.x = state.scareTriggers[0] + 1; state.player.invulnerable = 5; });
-  await expect.poll(() => page.evaluate(() => window.__chronokid.state.scare?.kind ?? null)).toBe('trex');
+  const shown = await seen;
+  expect(shown).toMatchObject({ kind: 'trex', x: 0, y: 0 });
+  expect(shown.display).not.toBe('none');
+  expect([shown.width, shown.height]).toEqual([shown.vw, shown.vh]);
   const layer = page.locator('#scare-layer');
-  await expect(layer).toBeVisible();
-  const viewport = page.viewportSize();
-  expect(await layer.boundingBox()).toEqual({ x: 0, y: 0, width: viewport?.width, height: viewport?.height });
   await expect.poll(() => page.evaluate(() => window.__chronokid.state.scare)).toBeNull();
   await expect(layer).toBeHidden();
 
