@@ -1,15 +1,26 @@
 import './style.css';
 import { createSound } from './game/audio';
-import { ERAS, LAST_ERA, START_LIVES } from './game/config';
+import { CHECKPOINT_X, ERAS, LAST_ERA, START_LIVES } from './game/config';
 import { bindInput } from './game/input';
 import { createRenderer } from './game/render';
-import { advanceEra, beginGame, createGame, frameDelta, requestJump, step, type GameState } from './game/simulation';
+import { createScareLayer } from './game/scares';
+import { advanceEra, beginGame, createGame, frameDelta, requestJump, retryEra, step, type GameState } from './game/simulation';
 
 function byId<T extends HTMLElement>(id: string): T {
   const element = document.getElementById(id);
   if (!element) throw new Error(`Missing #${id}`);
   return element as T;
 }
+
+/** Per-browser preferences; storage can be unavailable (private mode), so failures fall back to defaults. */
+const prefs = {
+  get(key: string, fallback: boolean): boolean {
+    try { const value = localStorage.getItem(`chronokid.${key}`); return value === null ? fallback : value === 'on'; } catch { return fallback; }
+  },
+  set(key: string, on: boolean): void {
+    try { localStorage.setItem(`chronokid.${key}`, on ? 'on' : 'off'); } catch { /* not persisted */ }
+  }
+};
 
 const canvas = byId<HTMLCanvasElement>('game');
 const ctx = canvas.getContext('2d');
@@ -26,10 +37,12 @@ const instructionsEl = byId('instructions');
 const actionButton = byId<HTMLButtonElement>('action');
 const restartButton = byId<HTMLButtonElement>('restart');
 const soundButton = byId<HTMLButtonElement>('sound');
+const scaresButton = byId<HTMLButtonElement>('scares');
 
 const state: GameState = createGame();
 const sound = createSound();
 const draw = createRenderer(ctx);
+const drawScareLayer = createScareLayer(byId<HTMLCanvasElement>('scare-layer'));
 let actionHandler = start;
 
 const pad = (score: number) => String(score).padStart(4, '0');
@@ -43,35 +56,45 @@ function setTitle(line: string, emphasis: string): void {
 function updateHud(): void {
   scoreEl.textContent = pad(state.score);
   heartsEl.textContent = '♥'.repeat(Math.max(0, state.lives)) + '♡'.repeat(Math.max(0, START_LIVES - state.lives));
-  eraEl.textContent = ERAS[state.eraIndex].name;
+  eraEl.textContent = `${state.eraIndex + 1}/${ERAS.length} ${ERAS[state.eraIndex].name}`;
 }
 
 function showOverlay(): void {
   overlay.classList.remove('hidden');
+  actionButton.hidden = false;
   restartButton.hidden = true;
   instructionsEl.hidden = state.phase !== 'start';
   if (state.phase === 'start') {
     eyebrowEl.textContent = 'A tiny hero. A very big timeline.';
     setTitle('Chronokid:', 'Era Hopper');
-    messageEl.textContent = 'Dash through three strange ages, scoop up the shiny stuff, and keep your feet out of trouble.';
+    messageEl.textContent = `Dash through ten strange ages, scoop up the shiny stuff, and keep your feet out of trouble. Watch out for surprises!`;
     actionButton.textContent = 'Play Game';
     actionHandler = start;
   } else if (state.phase === 'clear') {
     const last = state.eraIndex === LAST_ERA;
-    eyebrowEl.textContent = `ERA ${state.eraIndex + 1} COMPLETE`;
+    eyebrowEl.textContent = `ERA ${state.eraIndex + 1} OF ${ERAS.length} COMPLETE`;
     if (last) setTitle('Timeline', 'secured!'); else setTitle('Time to', 'hop.');
     messageEl.textContent = last
       ? 'You made it through the whole timeline. The future is looking pretty good.'
       : `Next stop: ${ERAS[state.eraIndex + 1].name.toLowerCase()}. The rules are about to change.`;
     actionButton.textContent = last ? 'See Final Score' : 'Advance to Next Era';
     actionHandler = advance;
-  } else {
-    const won = state.phase === 'victory';
-    eyebrowEl.textContent = won ? 'ALL AGES, ONE LEGEND' : 'THAT TIMELINE GOT BUMPY';
-    if (won) setTitle('Time well', 'hopped.'); else setTitle('Game', 'over.');
-    messageEl.textContent = `${won ? 'Timeline complete' : 'The adventure ends here'} — final score: ${pad(state.score)}.`;
+  } else if (state.phase === 'victory') {
+    eyebrowEl.textContent = 'ALL AGES, ONE LEGEND';
+    setTitle('Time well', 'hopped.');
+    messageEl.textContent = `Timeline complete — final score: ${pad(state.score)}.`;
     actionButton.hidden = true;
     restartButton.hidden = false;
+    restartButton.textContent = 'Play Again';
+  } else {
+    const fromCheckpoint = state.checkpointX >= CHECKPOINT_X;
+    eyebrowEl.textContent = 'THAT TIMELINE GOT BUMPY';
+    setTitle('Game', 'over.');
+    messageEl.textContent = `Score: ${pad(state.score)}. Try ${ERAS[state.eraIndex].name.toLowerCase()} again ${fromCheckpoint ? 'from the checkpoint flag' : 'from the start of the era'} with full lives, or start over.`;
+    actionButton.textContent = fromCheckpoint ? 'Retry from Checkpoint' : 'Retry Era';
+    actionHandler = retry;
+    restartButton.hidden = false;
+    restartButton.textContent = 'Start Over';
   }
 }
 
@@ -97,12 +120,38 @@ function advance(): void {
   if (state.phase === 'victory') showOverlay(); else hideOverlay();
 }
 
+function retry(): void {
+  sound.start();
+  retryEra(state);
+  updateHud();
+  hideOverlay();
+}
+
+function renderToggle(button: HTMLButtonElement, on: boolean, label: string, onText: string, offText: string): void {
+  button.textContent = on ? onText : offText;
+  button.setAttribute('aria-pressed', String(on));
+  button.setAttribute('aria-label', `Turn ${label} ${on ? 'off' : 'on'}`);
+}
+
 actionButton.addEventListener('click', () => actionHandler());
 restartButton.addEventListener('click', start);
+
+let soundOn = prefs.get('sound', true);
+sound.setEnabled(soundOn);
+renderToggle(soundButton, soundOn, 'sound', '♫', '×');
 soundButton.addEventListener('click', () => {
-  const on = sound.toggle();
-  soundButton.textContent = on ? '♫' : '×';
-  soundButton.setAttribute('aria-label', on ? 'Turn sound off' : 'Turn sound on');
+  soundOn = sound.toggle();
+  prefs.set('sound', soundOn);
+  renderToggle(soundButton, soundOn, 'sound', '♫', '×');
+});
+
+state.scaresEnabled = prefs.get('scares', true);
+renderToggle(scaresButton, state.scaresEnabled, 'jump scares', '👻', '👻');
+scaresButton.addEventListener('click', () => {
+  state.scaresEnabled = !state.scaresEnabled;
+  if (!state.scaresEnabled) state.scare = null;
+  prefs.set('scares', state.scaresEnabled);
+  renderToggle(scaresButton, state.scaresEnabled, 'jump scares', '👻', '👻');
 });
 
 const keys = bindInput(document, {
@@ -115,11 +164,13 @@ function frame(timestamp: number): void {
   const dt = frameDelta(timestamp, lastTime);
   lastTime = timestamp;
   for (const event of step(state, keys, dt)) {
-    if (event === 'jump' || event === 'collect' || event === 'hit') sound.play(event);
+    if (event === 'jump' || event === 'collect' || event === 'hit' || event === 'checkpoint') sound.play(event);
+    if (event === 'scare' && state.scare) sound.scare(state.scare.kind);
     if (event === 'collect' || event === 'hit') updateHud();
     if (event === 'clear' || event === 'gameover') showOverlay();
   }
   draw(state);
+  drawScareLayer(state.scare);
   requestAnimationFrame(frame);
 }
 

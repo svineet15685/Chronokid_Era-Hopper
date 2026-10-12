@@ -21,7 +21,7 @@
         <div class="panel">
           <div class="eyebrow" id="eyebrow">A tiny hero. A very big timeline.</div>
           <h1 id="title">Chronokid:<br /><em>Era Hopper</em></h1>
-          <p class="subtitle" id="message">Dash through three strange ages, scoop up the shiny stuff, and keep your feet out of trouble.</p>
+          <p class="subtitle" id="message">Dash through ten strange ages, scoop up the shiny stuff, and keep your feet out of trouble. Watch out for surprises!</p>
           <div class="controls-copy" id="instructions"><span><kbd>←</kbd> <kbd>→</kbd> move</span><span><kbd>SPACE</kbd> / <kbd>↑</kbd> jump</span><span>Collect everything you can.</span></div>
           <button id="action">Play Game</button>
           <button class="secondary" id="restart" hidden>Play Again</button>
@@ -31,8 +31,10 @@
         <div class="mobile-group"><button data-control="left" aria-label="Move left">←</button><button data-control="right" aria-label="Move right">→</button></div>
         <button class="jump" data-control="jump" aria-label="Jump">JUMP</button>
       </div>
-      <button class="sound-toggle" id="sound" aria-label="Toggle sound" title="Toggle sound">♫</button>
+      <button class="sound-toggle" id="sound" aria-label="Turn sound off" title="Sound">♫</button>
+      <button class="scare-toggle" id="scares" aria-label="Turn jump scares off" aria-pressed="true" title="Jump scares">👻</button>
     </main>
+    <canvas id="scare-layer" class="scare-layer" aria-hidden="true" hidden></canvas>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

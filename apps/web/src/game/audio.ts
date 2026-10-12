@@ -1,9 +1,16 @@
 // Synthesized sound effects; no external audio assets.
-export type SoundName = 'jump' | 'collect' | 'hit' | 'advance';
+import type { ScareKind } from './config';
+
+export type SoundName = 'jump' | 'collect' | 'hit' | 'advance' | 'checkpoint';
 
 declare global {
   interface Window { webkitAudioContext?: typeof AudioContext }
 }
+
+const SCARE_VOICES: Record<ScareKind, 'roar' | 'boo' | 'howl' | 'horn' | 'hiss' | 'buzz' | 'ticktock'> = {
+  trex: 'roar', mummy: 'boo', wolf: 'howl', dragon: 'roar', kraken: 'roar',
+  train: 'horn', ghost: 'boo', steambot: 'hiss', robot: 'buzz', timeeater: 'ticktock'
+};
 
 export function createSound() {
   let audioContext: AudioContext | null = null;
@@ -22,20 +29,51 @@ export function createSound() {
     }
   }
 
-  function tone(frequency: number, duration: number, type: OscillatorType = 'square', volume = 0.045, endFrequency = frequency): void {
+  function tone(frequency: number, duration: number, type: OscillatorType = 'square', volume = 0.045, endFrequency = frequency, delay = 0, vibrato = 0): void {
     const audio = start();
     if (!audio) return;
+    const at = audio.currentTime + delay;
     const oscillator = audio.createOscillator();
     const gain = audio.createGain();
     oscillator.type = type;
-    oscillator.frequency.setValueAtTime(frequency, audio.currentTime);
-    oscillator.frequency.exponentialRampToValueAtTime(Math.max(1, endFrequency), audio.currentTime + duration);
-    gain.gain.setValueAtTime(volume, audio.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + duration);
+    oscillator.frequency.setValueAtTime(frequency, at);
+    oscillator.frequency.exponentialRampToValueAtTime(Math.max(1, endFrequency), at + duration);
+    if (vibrato) {
+      const lfo = audio.createOscillator();
+      const depth = audio.createGain();
+      lfo.frequency.value = 7;
+      depth.gain.value = vibrato;
+      lfo.connect(depth);
+      depth.connect(oscillator.frequency);
+      lfo.start(at);
+      lfo.stop(at + duration);
+    }
+    gain.gain.setValueAtTime(volume, at);
+    gain.gain.exponentialRampToValueAtTime(0.001, at + duration);
     oscillator.connect(gain);
     gain.connect(audio.destination);
-    oscillator.start();
-    oscillator.stop(audio.currentTime + duration);
+    oscillator.start(at);
+    oscillator.stop(at + duration);
+  }
+
+  function noise(duration: number, volume: number, filter: BiquadFilterType, frequency: number): void {
+    const audio = start();
+    if (!audio) return;
+    const buffer = audio.createBuffer(1, Math.ceil(audio.sampleRate * duration), audio.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    const source = audio.createBufferSource();
+    const shaper = audio.createBiquadFilter();
+    const gain = audio.createGain();
+    source.buffer = buffer;
+    shaper.type = filter;
+    shaper.frequency.value = frequency;
+    gain.gain.setValueAtTime(volume, audio.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + duration);
+    source.connect(shaper);
+    shaper.connect(gain);
+    gain.connect(audio.destination);
+    source.start();
   }
 
   function play(name: SoundName): void {
@@ -44,6 +82,24 @@ export function createSound() {
     if (name === 'collect') { tone(620, 0.08, 'sine', 0.045, 920); setTimeout(() => tone(920, 0.1, 'sine', 0.035, 1120), 55); }
     if (name === 'hit') tone(180, 0.25, 'sawtooth', 0.05, 65);
     if (name === 'advance') { tone(440, 0.1, 'triangle', 0.035, 660); setTimeout(() => tone(660, 0.16, 'triangle', 0.04, 880), 90); }
+    if (name === 'checkpoint') { tone(523, 0.1, 'triangle', 0.04); tone(659, 0.1, 'triangle', 0.04, 659, 0.09); tone(784, 0.18, 'triangle', 0.045, 784, 0.18); }
+  }
+
+  /** A short, startling (but not ear-splitting) creature sound. */
+  function scare(kind: ScareKind): void {
+    if (!enabled) return;
+    switch (SCARE_VOICES[kind]) {
+      case 'roar': tone(170, 0.75, 'sawtooth', 0.09, 50); noise(0.55, 0.07, 'lowpass', 700); break;
+      case 'boo': tone(340, 0.85, 'sine', 0.11, 165, 0, 28); break;
+      case 'howl': tone(300, 0.35, 'sine', 0.08, 620); tone(620, 0.7, 'sine', 0.08, 300, 0.35, 12); break;
+      case 'horn': tone(233, 0.75, 'square', 0.05); tone(294, 0.75, 'square', 0.05); noise(0.4, 0.04, 'highpass', 2500); break;
+      case 'hiss': noise(0.9, 0.09, 'highpass', 1800); tone(90, 0.5, 'sawtooth', 0.05, 60); break;
+      case 'buzz': tone(110, 0.65, 'square', 0.06, 70, 0, 45); noise(0.3, 0.05, 'bandpass', 1200); break;
+      case 'ticktock':
+        for (let i = 0; i < 4; i++) tone(i % 2 ? 1400 : 1000, 0.05, 'square', 0.05, i % 2 ? 1400 : 1000, i * 0.12);
+        tone(150, 0.7, 'sawtooth', 0.08, 45, 0.45);
+        break;
+    }
   }
 
   function toggle(): boolean {
@@ -52,5 +108,9 @@ export function createSound() {
     return enabled;
   }
 
-  return { start, play, toggle };
+  function setEnabled(on: boolean): void {
+    enabled = on;
+  }
+
+  return { start, play, scare, toggle, setEnabled };
 }
