@@ -5,7 +5,19 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    # Wait a week before proposing a new release, so a compromised version is likely
+    # caught and pulled before it reaches this repo. Security updates are not delayed.
+    cooldown:
+      default-days: 7
+    groups:
+      npm-minor-and-patch:
+        update-types: [minor, patch]
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      github-actions:
+        patterns: ["*"]

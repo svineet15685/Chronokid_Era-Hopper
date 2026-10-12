@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "concurrently -k -n web,api \"npm run dev --workspace=@chronokid/web\" \"npm run dev --workspace=@chronokid/api\"",
     "build": "npm run build --workspaces --if-present",
+    "lint": "oxlint --deny-warnings",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "test:e2e": "npm run test:e2e --workspace=@chronokid/web",
@@ -23,6 +24,7 @@
   },
   "devDependencies": {
     "concurrently": "^9.1.2",
-    "drizzle-kit": "^0.31.11"
+    "drizzle-kit": "^0.31.11",
+    "oxlint": "^1.85.0"
   }
 }

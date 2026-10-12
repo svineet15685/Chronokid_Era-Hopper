@@ -8,7 +8,10 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
-  reporter: process.env.CI ? 'github' : 'list',
+  // Two workers matches GitHub's runners; the suite was stress-tested at this level.
+  workers: process.env.CI ? 2 : undefined,
+  // In CI: inline annotations, plus an HTML report the workflow uploads when tests fail.
+  reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : 'list',
   use: { baseURL: `http://localhost:${port}`, trace: 'retain-on-failure' },
   projects: [
     { name: 'desktop', use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 720 } } },

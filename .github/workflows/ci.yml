@@ -1,39 +1,195 @@
+# Tests and security checks for every pull request and every push to main.
+# This workflow never deploys. Job names are referenced by the main branch ruleset;
+# rename them there too if they change.
 name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
+  workflow_dispatch:
 
-permissions:
-  contents: read
+# Jobs opt in to the permissions they need.
+permissions: {}
 
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  NODE_VERSION: 22
 
 jobs:
-  verify:
+  quality:
+    name: Lint, type-check, build, unit tests
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version: 22
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
       - run: npm ci
+      - run: npm run lint
       - run: npm run typecheck
       - run: npm run build
       - run: npm test
-      - name: Browser checks
-        run: |
-          npx playwright install --with-deps chromium
-          npm run test:e2e
-      - run: npm audit --audit-level=high
-      - name: Check generated database migrations
+      - name: Check generated database migrations are committed
         run: |
           npm run db:generate
           if [[ -n "$(git status --porcelain -- apps/api/drizzle)" ]]; then
-            echo "Generated migrations are out of date. Review and commit the generated files."
+            echo "::error::Generated migrations are out of date. Run npm run db:generate, review the SQL, and commit it."
             git status --short -- apps/api/drizzle
             exit 1
           fi
+
+  e2e:
+    name: Browser tests (desktop and mobile)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: Read Playwright version
+        id: playwright
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright browsers
+        id: browser-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+      - name: Install Chromium
+        if: steps.browser-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+      - name: Install Chromium system libraries
+        if: steps.browser-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+      - run: npm run test:e2e
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-report
+          path: |
+            apps/web/playwright-report/
+            apps/web/test-results/
+          retention-days: 7
+
+  database:
+    name: Migrations and API readiness (PostgreSQL)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    services:
+      postgres:
+        # Pinned by digest; refresh it when bumping PostgreSQL (tag kept for readability).
+        image: postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
+        env:
+          POSTGRES_DB: chronokid
+          POSTGRES_USER: chronokid
+          # Throwaway database that exists only for this job; not a real credential.
+          POSTGRES_PASSWORD: ci-throwaway
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U chronokid -d chronokid"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://chronokid:ci-throwaway@localhost:5432/chronokid
+      API_HOST: 127.0.0.1
+      API_PORT: 3001
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: Apply migrations to an empty database
+        run: npm run db:migrate
+      - name: Re-apply migrations (must be a no-op)
+        run: npm run db:migrate
+      - name: Build the API
+        run: npm run build --workspace=@chronokid/api
+      - name: Start the built API and require readiness
+        run: |
+          node apps/api/dist/server.js > "$RUNNER_TEMP/api.log" 2>&1 &
+          for _ in $(seq 1 30); do
+            if curl -fsS "http://127.0.0.1:${API_PORT}/api/health/ready"; then
+              echo
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::API did not report ready within 30 seconds."
+          cat "$RUNNER_TEMP/api.log"
+          exit 1
+
+  dependencies:
+    name: Dependency audit and signatures
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: Production dependencies (any known vulnerability fails)
+        run: npm audit --omit=dev --audit-level=low
+      - name: All dependencies (high or critical fails)
+        run: npm audit --audit-level=high
+      - name: Verify registry signatures and provenance
+        run: npm audit signatures
+
+  dependency-review:
+    name: Dependency review (pull requests)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          # Blocks pull requests that add dependencies with known moderate+ vulnerabilities.
+          fail-on-severity: moderate
+
+  workflows:
+    name: Workflow security lint (zizmor)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Audit GitHub Actions workflows
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: pipx run zizmor==1.30.1 --format=github .
