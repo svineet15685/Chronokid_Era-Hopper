@@ -1,28 +1,125 @@
 :root {
+  color-scheme: dark;
+  --ink: #16231f;
+  --paper: #f6efd9;
+  --lime: #c6f36b;
+  --coral: #ff8066;
+  --line: rgba(246, 239, 217, .22);
   font-family: "Trebuchet MS", "Segoe UI", sans-serif;
-  color: #f6efd9;
-  background: #16231f;
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
 }
-
 * { box-sizing: border-box; }
-
+html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
 body {
-  min-width: 320px;
-  min-height: 100vh;
-  margin: 0;
   display: grid;
   place-items: center;
-  background: radial-gradient(ellipse at 80% 15%, #35594c 0, transparent 42%), #16231f;
+  color: var(--paper);
+  background: #111b1a;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
 }
-
-.setup-screen { width: min(520px, calc(100% - 40px)); padding: 40px 0; }
-.eyebrow { color: #c6f36b; font-size: 12px; font-weight: 900; letter-spacing: 1.5px; }
-h1 { margin: 26px 0; font-size: clamp(42px, 9vw, 72px); line-height: .98; text-transform: uppercase; }
-h1 span { color: #c6f36b; }
-.status-line { margin: 40px 0 10px; color: #b4c3b9; font-size: 12px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; }
-.service-list { margin: 0; padding: 0; list-style: none; border-top: 1px solid #ffffff29; }
-.service-list li { display: flex; justify-content: space-between; gap: 20px; padding: 14px 0; border-bottom: 1px solid #ffffff29; }
-.service-state { color: #c6f36b; font-size: 11px; letter-spacing: .6px; }
-.service-state.pending { color: #ff9b76; }
+.game-shell {
+  position: relative;
+  width: min(100vw, 160vh);
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: #182e2b;
+  box-shadow: 0 22px 80px #0009;
+  isolation: isolate;
+}
+canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+.topbar {
+  position: absolute;
+  z-index: 2;
+  inset: 16px 20px auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  pointer-events: none;
+  text-shadow: 0 2px 3px #1119;
+}
+.brand { font-size: 12px; font-weight: 900; letter-spacing: 1.2px; text-transform: uppercase; }
+.brand span { color: var(--lime); }
+.hud { display: flex; align-items: center; gap: 18px; font-size: 13px; font-weight: 800; }
+.hud-item { white-space: nowrap; }
+.hud-label { color: #fff9; margin-right: 5px; font-size: 10px; letter-spacing: .8px; }
+#hearts { color: #ff8066; letter-spacing: 2px; font-size: 17px; vertical-align: -1px; }
+.era-pill { padding: 7px 10px; border: 1px solid #fff6; background: #101b1c99; border-radius: 3px; }
+.overlay {
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: linear-gradient(90deg, #111b1acc, #111b1a85 58%, #111b1a55);
+  transition: opacity .22s ease, visibility .22s ease;
+}
+.overlay.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+.panel { width: min(470px, 90%); animation: arrive .38s both; }
+@keyframes arrive { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+.eyebrow { color: var(--lime); font-size: 11px; font-weight: 900; letter-spacing: 2px; text-transform: uppercase; }
+h1 { margin: 10px 0 10px; max-width: 430px; font-size: clamp(35px, 6vw, 66px); line-height: .94; letter-spacing: 0; text-transform: uppercase; }
+h1 em { color: var(--lime); font-style: normal; }
+.subtitle { max-width: 380px; margin: 16px 0 24px; color: #f6efd9d9; font-size: 15px; line-height: 1.55; }
+.controls-copy { display: flex; flex-wrap: wrap; gap: 8px 14px; margin: 0 0 24px; color: #f6efd9ba; font-size: 12px; }
+.controls-copy[hidden] { display: none; }
+kbd { display: inline-block; min-width: 24px; padding: 4px 6px; border: 1px solid #fff5; border-bottom-width: 2px; border-radius: 3px; color: white; text-align: center; font-family: inherit; font-size: 11px; font-weight: 700; }
+button {
+  min-height: 46px;
+  padding: 0 19px;
+  border: 0;
+  border-radius: 3px;
+  color: var(--ink);
+  background: var(--lime);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow: 0 4px 0 #819b47;
+  transition: transform .12s ease, filter .12s ease;
+  touch-action: manipulation;
+}
+button:hover { filter: brightness(1.08); transform: translateY(-1px); }
+button:active { transform: translateY(2px); box-shadow: 0 2px 0 #819b47; }
+.secondary { margin-left: 9px; border: 1px solid #fff5; color: var(--paper); background: #fff1; box-shadow: none; }
+.secondary:active { box-shadow: none; }
+.mobile-controls { display: none; position: absolute; z-index: 2; inset: auto 16px 14px; justify-content: space-between; pointer-events: none; }
+.mobile-group { display: flex; gap: 9px; }
+.mobile-controls button {
+  width: 54px; min-width: 54px; height: 50px; min-height: 50px; padding: 0;
+  border: 1px solid #fff5; color: white; background: #10201fbf;
+  font-size: 20px; box-shadow: 0 3px 0 #07110f99; pointer-events: auto;
+  touch-action: none;
+}
+.mobile-controls button.jump { width: 66px; min-width: 66px; color: var(--ink); background: var(--lime); border: 0; font-size: 11px; }
+.sound-toggle {
+  position: absolute; z-index: 4; right: 18px; bottom: 16px; width: 38px; min-width: 38px; height: 36px; min-height: 36px;
+  padding: 0; border: 1px solid #fff4; color: white; background: #10201f9c; font-size: 16px; box-shadow: none;
+}
+@media (pointer: coarse), (max-width: 700px) {
+  .mobile-controls { display: flex; }
+  .topbar { inset: 10px 12px auto; }
+  .brand { font-size: 9px; }
+  .hud { gap: 8px; font-size: 10px; }
+  .hud-label { font-size: 8px; }
+  .era-pill { padding: 5px 7px; }
+  #hearts { font-size: 13px; }
+  .sound-toggle { right: 12px; bottom: auto; top: 48px; width: 30px; min-width: 30px; height: 30px; min-height: 30px; }
+  .subtitle { font-size: 13px; margin: 11px 0 15px; }
+  .controls-copy { margin-bottom: 15px; }
+  .overlay { background: #111b1acc; }
+}
+@media (max-height: 430px) {
+  .panel { transform: scale(.84); }
+  .overlay { padding: 10px; }
+}
+/* Portrait phones: the 16:9 shell is too short for the menus and thumbs, so menus and
+   touch controls use the whole viewport while the game stays centered. */
+@media (orientation: portrait) {
+  .overlay { position: fixed; }
+  .mobile-controls { position: fixed; inset: auto 16px calc(18px + env(safe-area-inset-bottom)); }
+}
