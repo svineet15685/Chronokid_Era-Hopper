@@ -28,10 +28,14 @@ async function createHarness(): Promise<Harness> {
 
 const auth = (token: string) => ({ authorization: `Bearer ${token}` });
 
-async function createPlayer(app: App, displayName = 'Ada') {
+async function createPlayer(app: App, displayName = 'Brave Otter 1') {
   const response = await app.inject({ method: 'POST', url: '/api/players', payload: { displayName } });
   expect(response.statusCode).toBe(201);
-  return response.json<{ player: { id: string; displayName: string }; token: string }>();
+  return response.json<{ player: { id: string; displayName: string; listed: boolean }; token: string }>();
+}
+
+function joinLeaderboard(app: App, token: string, payload: Record<string, unknown> = { listed: true }) {
+  return app.inject({ method: 'PATCH', url: '/api/players/me', headers: auth(token), payload });
 }
 
 async function startRun(app: App, token: string): Promise<string> {
@@ -51,8 +55,8 @@ describe.skipIf(!dbTestsEnabled)('API with PostgreSQL', () => {
 
   describe('players', () => {
     it('creates a guest player and stores only a hash of the token', async () => {
-      const { player, token } = await createPlayer(h.app, '  Zoë   Star ');
-      expect(player.displayName).toBe('Zoë Star');
+      const { player, token } = await createPlayer(h.app, '  Zippy   Zebra 9 ');
+      expect(player).toMatchObject({ displayName: 'Zippy Zebra 9', listed: false });
       expect(token).toMatch(/^[A-Za-z0-9_-]{43}$/);
       const rows = await h.database.db.execute<{ token_hash: string }>(sql`select token_hash from players`);
       expect(rows[0].token_hash).toBe(createHash('sha256').update(token).digest('hex'));
@@ -62,10 +66,11 @@ describe.skipIf(!dbTestsEnabled)('API with PostgreSQL', () => {
 
     it.each([
       ['an empty name', { displayName: '' }],
-      ['a too-long name', { displayName: 'x'.repeat(25) }],
+      ['a typed-in name', { displayName: 'Ada' }],
+      ['a name outside the word lists', { displayName: 'Evil Otter 3' }],
       ['markup', { displayName: '<b>hi</b>' }],
-      ['an extra field', { displayName: 'Ada', isAdmin: true }],
-      ['a wrong type', { displayName: ['Ada'] }]
+      ['an extra field', { displayName: 'Brave Otter 1', isAdmin: true }],
+      ['a wrong type', { displayName: ['Brave Otter 1'] }]
     ])('rejects %s with a generic 400', async (_label, payload) => {
       const response = await h.app.inject({ method: 'POST', url: '/api/players', payload });
       expect(response.statusCode).toBe(400);
@@ -78,7 +83,7 @@ describe.skipIf(!dbTestsEnabled)('API with PostgreSQL', () => {
       expect(malformed.json()).toEqual({ error: 'invalid_request' });
       const missing = await h.app.inject({ method: 'POST', url: '/api/players' });
       expect(missing.statusCode).toBe(400);
-      const huge = await h.app.inject({ method: 'POST', url: '/api/players', payload: { displayName: 'Ada', pad: 'x'.repeat(10_000) } });
+      const huge = await h.app.inject({ method: 'POST', url: '/api/players', payload: { displayName: 'Brave Otter 1', pad: 'x'.repeat(10_000) } });
       expect(huge.statusCode).toBe(413);
       expect(huge.json()).toEqual({ error: 'invalid_request' });
     });
@@ -117,7 +122,8 @@ describe.skipIf(!dbTestsEnabled)('API with PostgreSQL', () => {
       expect(response.statusCode).toBe(200);
       expect(response.json()).toEqual({
         run: { id: runId, score: 2500, eraReached: 2, outcome: 'gameover', durationMs: 45_000 },
-        personalBest: true
+        personalBest: true,
+        rank: null
       });
     });
 
@@ -131,8 +137,8 @@ describe.skipIf(!dbTestsEnabled)('API with PostgreSQL', () => {
     });
 
     it("hides other players' runs as not found", async () => {
-      const owner = await createPlayer(h.app, 'Owner');
-      const other = await createPlayer(h.app, 'Other');
+      const owner = await createPlayer(h.app, 'Happy Koala 1');
+      const other = await createPlayer(h.app, 'Happy Koala 2');
       const runId = await startRun(h.app, owner.token);
       h.advance(20_000);
       const response = await finishRun(h.app, other.token, runId, { score: 100, eraReached: 1, outcome: 'gameover' });
@@ -176,6 +182,32 @@ describe.skipIf(!dbTestsEnabled)('API with PostgreSQL', () => {
       expect(rows[0].completed_at).toBeNull();
     });
 
+    it('continues a finished run, timing the continuation from the original start', async () => {
+      const { token } = await createPlayer(h.app);
+      const first = await startRun(h.app, token);
+      h.advance(4 * MIN_ERA_MS);
+      expect((await finishRun(h.app, token, first, { score: 4000, eraReached: 5, outcome: 'gameover' })).statusCode).toBe(200);
+
+      const retry = await h.app.inject({ method: 'POST', url: '/api/runs', headers: auth(token), payload: { continues: first } });
+      expect(retry.statusCode).toBe(201);
+      h.advance(5_000);
+      const finished = await finishRun(h.app, token, retry.json().runId, { score: 4500, eraReached: 5, outcome: 'gameover' });
+      expect(finished.statusCode).toBe(200);
+      expect(finished.json().run.durationMs).toBe(4 * MIN_ERA_MS + 5_000);
+    });
+
+    it("refuses to continue unfinished or other players' runs", async () => {
+      const owner = await createPlayer(h.app, 'Happy Koala 1');
+      const other = await createPlayer(h.app, 'Happy Koala 2');
+      const open = await startRun(h.app, owner.token);
+      const continueRun = (token: string, continues: string) => h.app.inject({ method: 'POST', url: '/api/runs', headers: auth(token), payload: { continues } });
+      expect((await continueRun(owner.token, open)).statusCode).toBe(409);
+      h.advance(20_000);
+      await finishRun(h.app, owner.token, open, { score: 100, eraReached: 1, outcome: 'gameover' });
+      expect((await continueRun(other.token, open)).statusCode).toBe(404);
+      expect((await continueRun(owner.token, 'nope')).statusCode).toBe(400);
+    });
+
     it('reports whether a run is a personal best', async () => {
       const { token } = await createPlayer(h.app);
       const results = [];
@@ -189,32 +221,36 @@ describe.skipIf(!dbTestsEnabled)('API with PostgreSQL', () => {
   });
 
   describe('leaderboard', () => {
-    async function playerWithRuns(name: string, scores: number[], unfinished = false) {
+    async function playerWithRuns(name: string, scores: number[], { unfinished = false, listed = true } = {}) {
       const { token } = await createPlayer(h.app, name);
+      const joined = listed ? await joinLeaderboard(h.app, token) : null;
+      expect(joined?.statusCode ?? 200).toBe(200);
       for (const score of scores) {
         const runId = await startRun(h.app, token);
         h.advance(30_000);
         await finishRun(h.app, token, runId, { score, eraReached: 2, outcome: 'gameover' });
       }
       if (unfinished) await startRun(h.app, token);
+      return token;
     }
 
-    it("ranks each player's best finished run, without player ids", async () => {
-      await playerWithRuns('Ada', [800, 2000]);
-      await playerWithRuns('Bo', [3000]);
-      await playerWithRuns('Cy', [500], true);
-      await createPlayer(h.app, 'NoRuns');
+    it("ranks each listed player's best finished run, without player ids", async () => {
+      await playerWithRuns('Brave Otter 1', [800, 2000]);
+      await playerWithRuns('Clever Fox 2', [3000]);
+      await playerWithRuns('Sunny Owl 3', [500], { unfinished: true });
+      await playerWithRuns('Quick Lynx 4', [5000], { listed: false });
+      await createPlayer(h.app, 'Merry Moose 5');
       const response = await h.app.inject({ method: 'GET', url: '/api/leaderboard' });
       expect(response.statusCode).toBe(200);
       expect(response.headers['cache-control']).toBe('public, max-age=15');
       const { entries } = response.json<{ entries: Record<string, unknown>[] }>();
-      expect(entries.map(e => [e.rank, e.displayName, e.score])).toEqual([[1, 'Bo', 3000], [2, 'Ada', 2000], [3, 'Cy', 500]]);
+      expect(entries.map(e => [e.rank, e.displayName, e.score])).toEqual([[1, 'Clever Fox 2', 3000], [2, 'Brave Otter 1', 2000], [3, 'Sunny Owl 3', 500]]);
       expect(Object.keys(entries[0]).sort()).toEqual(['displayName', 'eraReached', 'finishedAt', 'outcome', 'rank', 'score']);
     });
 
     it('applies and validates the limit', async () => {
-      await playerWithRuns('Ada', [100]);
-      await playerWithRuns('Bo', [200]);
+      await playerWithRuns('Brave Otter 1', [100]);
+      await playerWithRuns('Clever Fox 2', [200]);
       const limited = await h.app.inject({ method: 'GET', url: '/api/leaderboard?limit=1' });
       expect(limited.json().entries).toHaveLength(1);
       const invalid = await h.app.inject({ method: 'GET', url: '/api/leaderboard?limit=500' });
@@ -222,12 +258,72 @@ describe.skipIf(!dbTestsEnabled)('API with PostgreSQL', () => {
     });
   });
 
+  describe('joining the leaderboard', () => {
+    it('lets a player pick a new name and opt in, returning their rank', async () => {
+      const rival = await createPlayer(h.app, 'Clever Fox 2');
+      await joinLeaderboard(h.app, rival.token);
+      for (const score of [2000]) {
+        const runId = await startRun(h.app, rival.token);
+        h.advance(30_000);
+        await finishRun(h.app, rival.token, runId, { score, eraReached: 1, outcome: 'gameover' });
+      }
+
+      const { token } = await createPlayer(h.app);
+      const runId = await startRun(h.app, token);
+      h.advance(30_000);
+      const finished = await finishRun(h.app, token, runId, { score: 1500, eraReached: 1, outcome: 'gameover' });
+      expect(finished.json().rank).toBeNull();
+
+      const joined = await joinLeaderboard(h.app, token, { displayName: 'Turbo Panda 42', listed: true });
+      expect(joined.statusCode).toBe(200);
+      expect(joined.json()).toEqual({ player: expect.objectContaining({ displayName: 'Turbo Panda 42', listed: true }), rank: 2 });
+      const board = (await h.app.inject({ method: 'GET', url: '/api/leaderboard' })).json<{ entries: { displayName: string; rank: number }[] }>();
+      expect(board.entries.map(e => [e.rank, e.displayName])).toEqual([[1, 'Clever Fox 2'], [2, 'Turbo Panda 42']]);
+    });
+
+    it('returns the rank after finishing a run once listed, breaking ties by finish time', async () => {
+      const first = await createPlayer(h.app, 'Clever Fox 2');
+      await joinLeaderboard(h.app, first.token);
+      const firstRun = await startRun(h.app, first.token);
+      h.advance(30_000);
+      await finishRun(h.app, first.token, firstRun, { score: 1000, eraReached: 1, outcome: 'gameover' });
+
+      const second = await createPlayer(h.app, 'Sunny Owl 3');
+      await joinLeaderboard(h.app, second.token);
+      const tieRun = await startRun(h.app, second.token);
+      h.advance(30_000);
+      expect((await finishRun(h.app, second.token, tieRun, { score: 1000, eraReached: 1, outcome: 'gameover' })).json().rank).toBe(2);
+      const winRun = await startRun(h.app, second.token);
+      h.advance(30_000);
+      expect((await finishRun(h.app, second.token, winRun, { score: 1100, eraReached: 1, outcome: 'gameover' })).json().rank).toBe(1);
+    });
+
+    it('requires a token and a valid change', async () => {
+      const anonymous = await h.app.inject({ method: 'PATCH', url: '/api/players/me', payload: { listed: true } });
+      expect(anonymous.statusCode).toBe(401);
+      const { token } = await createPlayer(h.app);
+      for (const payload of [{}, { listed: false }, { displayName: 'Ada' }, { listed: true, isAdmin: true }]) {
+        const response = await joinLeaderboard(h.app, token, payload);
+        expect(response.statusCode).toBe(400);
+        expect(response.json()).toEqual({ error: 'invalid_request' });
+      }
+    });
+
+    it('allows PATCH from the web origin in CORS preflight', async () => {
+      const preflight = await h.app.inject({
+        method: 'OPTIONS', url: '/api/players/me',
+        headers: { origin: ORIGIN, 'access-control-request-method': 'PATCH', 'access-control-request-headers': 'authorization,content-type' }
+      });
+      expect(String(preflight.headers['access-control-allow-methods'])).toContain('PATCH');
+    });
+  });
+
   describe('abuse controls and headers', () => {
     it('rate limits player creation', async () => {
       const statuses = [];
-      for (let i = 0; i < 6; i++) statuses.push((await h.app.inject({ method: 'POST', url: '/api/players', payload: { displayName: `P${i}` } })).statusCode);
+      for (let i = 0; i < 6; i++) statuses.push((await h.app.inject({ method: 'POST', url: '/api/players', payload: { displayName: `Lucky Yak ${i + 1}` } })).statusCode);
       expect(statuses).toEqual([201, 201, 201, 201, 201, 429]);
-      const limited = await h.app.inject({ method: 'POST', url: '/api/players', payload: { displayName: 'Late' } });
+      const limited = await h.app.inject({ method: 'POST', url: '/api/players', payload: { displayName: 'Lucky Yak 9' } });
       expect(limited.json()).toEqual({ error: 'rate_limited' });
     });
 
@@ -266,7 +362,7 @@ describe('when the database is down', () => {
   it('reports not ready and returns generic 503s without leaking details', async () => {
     const ready = await app.inject({ method: 'GET', url: '/api/health/ready' });
     expect(ready.statusCode).toBe(503);
-    const create = await app.inject({ method: 'POST', url: '/api/players', payload: { displayName: 'Ada' } });
+    const create = await app.inject({ method: 'POST', url: '/api/players', payload: { displayName: 'Brave Otter 1' } });
     expect(create.statusCode).toBe(503);
     expect(create.json()).toEqual({ error: 'unavailable' });
     const leaderboard = await app.inject({ method: 'GET', url: '/api/leaderboard' });

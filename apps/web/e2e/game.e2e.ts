@@ -1,21 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
-
-declare global {
-  interface Window { __chronokid: { state: import('../src/game/simulation').GameState } }
-}
+import { isTouch, loseLastLife, playerX, startGame } from './helpers';
 
 const WORLD_END = 3440;
 const ERA_NAMES = ['STONE AGE', 'ANCIENT EGYPT', 'VIKING AGE', 'MEDIEVAL AGE', 'PIRATE AGE', 'WILD WEST', 'HAUNTED MANOR', 'STEAM AGE', 'FUTURE AGE', 'END OF TIME'];
-const isTouch = (projectName: string) => projectName.startsWith('mobile');
-
-async function startGame(page: Page, touch: boolean): Promise<void> {
-  const play = page.getByRole('button', { name: 'Play Game' });
-  await expect(play).toBeInViewport({ ratio: 1 });
-  if (touch) await play.tap(); else await play.click();
-  await expect(page.locator('#overlay')).toHaveClass(/hidden/);
-}
-
-const playerX = (page: Page) => page.evaluate(() => window.__chronokid.state.player.x);
 
 /**
  * Holds a control until the player has moved `distance` pixels (negative means left), then releases it.
@@ -121,15 +108,6 @@ test('progresses through all ten eras to victory', async ({ page }, testInfo) =>
   await expect(page.locator('#message')).toContainText('final score:');
   await expect(page.getByRole('button', { name: 'Play Again' })).toBeInViewport({ ratio: 1 });
 });
-
-/** Keeps putting the player on the first hazard until the last life is gone. */
-async function loseLastLife(page: Page): Promise<void> {
-  await page.evaluate(() => { const { state } = window.__chronokid; state.lives = 1; state.player.invulnerable = 0; });
-  await expect.poll(async () => {
-    await page.evaluate(() => { const { state } = window.__chronokid; state.player.x = state.hazards[0].x; });
-    return page.locator('#title').textContent();
-  }).toBe('Gameover.');
-}
 
 test('game over offers a retry of the era, or starting over', async ({ page }, testInfo) => {
   const touch = isTouch(testInfo.project.name);

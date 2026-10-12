@@ -7,7 +7,8 @@ export default defineConfig({
   ssr: { resolve: { conditions: ['source', ...defaultServerConditions] } },
   server: {
     proxy: {
-      '/api': 'http://localhost:3001'
+      // The browser tests point this at their own API instance.
+      '/api': process.env.API_PROXY_TARGET ?? 'http://localhost:3001'
     }
   }
 });

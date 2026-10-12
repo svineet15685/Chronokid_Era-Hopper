@@ -1,27 +1,51 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_RUN_MS, MIN_ERA_MS, checkRunPlausibility, createPlayerBody, finishRunBody, leaderboardQuery } from '../src/validation.js';
+import { DISPLAY_NAME_MAX, generateDisplayName } from '@chronokid/shared';
+import { MAX_RUN_MS, MIN_ERA_MS, checkRunPlausibility, createPlayerBody, finishRunBody, leaderboardQuery, updatePlayerBody } from '../src/validation.js';
 
 describe('display names', () => {
   it.each([
-    ['Ada', 'Ada'],
-    ['  Mia   Rose  ', 'Mia Rose'],
-    ['Zoë', 'Zoë'],
-    ['小明', '小明'],
-    ["O'Brien-2", "O'Brien-2"],
-    ['Ｆｕｌｌ', 'Full'],
-    ['tab\tname', 'tab name']
+    ['Brave Otter 27', 'Brave Otter 27'],
+    ['  Brave   Otter 27 ', 'Brave Otter 27'],
+    ['Zippy Zebra 99', 'Zippy Zebra 99'],
+    ['Super Fox 1', 'Super Fox 1'],
+    ['Brave Otter \uff12\uff17', 'Brave Otter 27']
   ])('accepts and normalizes %j', (input, expected) => {
     expect(createPlayerBody.parse({ displayName: input }).displayName).toBe(expected);
   });
 
-  it.each(['', '   ', 'a'.repeat(25), '<script>', 'hi\u{1F600}', '-dash', 'null\u0000byte', `right${String.fromCharCode(0x202e)}left`])('rejects %j', input => {
+  it.each([
+    '', 'Ada', 'Brave Otter', 'Brave Otter 0', 'Brave Otter 100', 'Brave Otter 07', 'brave otter 27',
+    'Evil Otter 27', 'Brave Dragon 27', 'Brave Otter 27 Jr', '<script>', 'x'.repeat(200)
+  ])('rejects %j', input => {
     expect(createPlayerBody.safeParse({ displayName: input }).success).toBe(false);
   });
 
   it('rejects missing, wrongly typed, and extra fields', () => {
     expect(createPlayerBody.safeParse({}).success).toBe(false);
     expect(createPlayerBody.safeParse({ displayName: 7 }).success).toBe(false);
-    expect(createPlayerBody.safeParse({ displayName: 'Ada', admin: true }).success).toBe(false);
+    expect(createPlayerBody.safeParse({ displayName: 'Brave Otter 27', admin: true }).success).toBe(false);
+  });
+
+  it('accepts every name the generator can produce', () => {
+    let seed = 1;
+    const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    for (let i = 0; i < 2000; i++) {
+      const name = generateDisplayName(random);
+      expect(name.length).toBeLessThanOrEqual(DISPLAY_NAME_MAX);
+      expect(createPlayerBody.safeParse({ displayName: name }).success).toBe(true);
+    }
+  });
+});
+
+describe('update player body', () => {
+  it('accepts a rename, an opt-in, or both', () => {
+    expect(updatePlayerBody.parse({ listed: true })).toEqual({ listed: true });
+    expect(updatePlayerBody.parse({ displayName: 'Brave Otter 27' })).toEqual({ displayName: 'Brave Otter 27' });
+    expect(updatePlayerBody.parse({ displayName: 'Brave Otter 27', listed: true })).toEqual({ displayName: 'Brave Otter 27', listed: true });
+  });
+
+  it.each([{}, { listed: false }, { listed: 'yes' }, { displayName: 'Ada' }, { listed: true, admin: true }])('rejects %j', body => {
+    expect(updatePlayerBody.safeParse(body).success).toBe(false);
   });
 });
 

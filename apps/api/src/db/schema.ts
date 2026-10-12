@@ -1,11 +1,13 @@
 import { sql } from 'drizzle-orm';
-import { char, check, index, integer, pgEnum, pgTable, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
+import { boolean, char, check, index, integer, pgEnum, pgTable, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
 
 export const players = pgTable('players', {
   id: uuid('id').defaultRandom().primaryKey(),
   displayName: varchar('display_name', { length: 24 }).notNull(),
   /** SHA-256 (hex) of the player's bearer token; the token itself is never stored. */
   tokenHash: char('token_hash', { length: 64 }).notNull().unique(),
+  /** Players start unlisted and appear on the leaderboard only after opting in. */
+  listed: boolean('listed').default(false).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
 }, t => [
   check('players_display_name_length', sql`char_length(${t.displayName}) between 1 and 24`)

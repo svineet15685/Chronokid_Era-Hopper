@@ -52,14 +52,17 @@ canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; 
   position: absolute;
   z-index: 3;
   inset: 0;
-  display: grid;
-  place-items: center;
+  /* Flex plus an auto-margin panel centers short menus and lets tall ones scroll without clipping the top. */
+  display: flex;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
   padding: 24px;
   background: linear-gradient(90deg, #111b1acc, #111b1a85 58%, #111b1a55);
   transition: opacity .22s ease, visibility .22s ease;
 }
 .overlay.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
-.panel { width: min(470px, 90%); animation: arrive .38s both; }
+.panel { width: min(470px, 90%); margin: auto; animation: arrive .38s both; }
 @keyframes arrive { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 .eyebrow { color: var(--lime); font-size: 11px; font-weight: 900; letter-spacing: 2px; text-transform: uppercase; }
 h1 { margin: 10px 0 10px; max-width: 430px; font-size: clamp(35px, 6vw, 66px); line-height: .94; letter-spacing: 0; text-transform: uppercase; }
@@ -89,6 +92,29 @@ button:hover { filter: brightness(1.08); transform: translateY(-1px); }
 button:active { transform: translateY(2px); box-shadow: 0 2px 0 #819b47; }
 .secondary { margin-left: 9px; border: 1px solid #fff5; color: var(--paper); background: #fff1; box-shadow: none; }
 .secondary:active { box-shadow: none; }
+.menu-actions { display: flex; flex-wrap: wrap; gap: 9px; }
+.menu-actions .secondary { margin-left: 0; }
+.menu-actions button[hidden] { display: none; }
+/* Online status, name picker, and leaderboard. */
+.online { margin: -8px 0 18px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 3px; background: #0d1716b3; font-size: 13px; line-height: 1.45; }
+.online:empty { display: none; }
+.online-question { margin: 0 0 8px; font-weight: 800; }
+.online-note { margin: 0; }
+.name-pick { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.name-chip { padding: 6px 10px; border: 1px solid #c6f36b66; border-radius: 3px; color: var(--lime); background: #c6f36b1f; font-weight: 900; }
+.icon-button { width: 38px; min-height: 34px; padding: 0; border: 1px solid #fff5; background: #fff1; box-shadow: none; font-size: 16px; }
+.online-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.small-button { min-height: 34px; padding: 0 12px; font-size: 11px; }
+.online-actions .secondary { margin-left: 0; }
+/* The leaderboard is a full menu, so it always uses the whole viewport. */
+.board-overlay { position: fixed; z-index: 5; background: #101a19; }
+.board-overlay h1 { font-size: clamp(30px, 5vw, 52px); }
+.board { max-height: min(40vh, 300px); margin: 0 0 16px; padding: 0; overflow-y: auto; border-top: 1px solid var(--line); list-style: none; touch-action: pan-y; }
+.board-row { display: grid; grid-template-columns: 2.6em 1fr auto 3.4em; gap: 10px; align-items: center; padding: 7px 4px; border-bottom: 1px solid var(--line); font-size: 13px; }
+.board-row.is-you { color: var(--lime); font-weight: 800; }
+.board-rank { color: #fff9; }
+.board-era { color: #f6efd9a6; font-size: 11px; white-space: nowrap; }
+.board-score { text-align: right; font-weight: 800; }
 .mobile-controls { display: none; position: absolute; z-index: 2; inset: auto 16px 14px; justify-content: space-between; pointer-events: none; }
 .mobile-group { display: flex; gap: 9px; }
 .mobile-controls button {
@@ -126,13 +152,26 @@ button:active { transform: translateY(2px); box-shadow: 0 2px 0 #819b47; }
   .brand { display: none; }
   .topbar { justify-content: flex-end; }
 }
-@media (max-height: 430px) {
-  .panel { transform: scale(.84); }
-  .overlay { padding: 10px; }
+/* Short landscape screens: the 16:9 game area is too short for menus, so they use the whole viewport
+   with compact type, keeping the main buttons above the fold. */
+@media (max-height: 500px) {
+  .overlay { position: fixed; padding: 10px 16px; }
+  .panel { width: min(640px, 94%); }
+  .eyebrow { font-size: 10px; }
+  h1, .board-overlay h1 { margin: 4px 0; font-size: 28px; }
+  .subtitle { margin: 6px 0 10px; font-size: 12px; line-height: 1.4; }
+  .controls-copy { margin-bottom: 10px; }
+  .online { margin: 0 0 10px; padding: 7px 10px; font-size: 12px; }
+  .name-pick { margin-bottom: 6px; }
+  .board { max-height: 30vh; margin-bottom: 10px; }
+  .board-row { padding: 4px; }
+  button { min-height: 38px; }
 }
 /* Portrait phones: the 16:9 shell is too short for the menus and thumbs, so menus and
    touch controls use the whole viewport while the game stays centered. */
 @media (orientation: portrait) {
   .overlay { position: fixed; }
+  /* Keep the toggles in the screen corner, clear of the centered menus. */
+  .sound-toggle, .scare-toggle { position: fixed; top: calc(12px + env(safe-area-inset-top)); bottom: auto; }
   .mobile-controls { position: fixed; inset: auto 16px calc(18px + env(safe-area-inset-bottom)); }
 }

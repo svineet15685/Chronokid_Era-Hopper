@@ -5,14 +5,28 @@ import { requirePlayer } from '../auth.js';
 import type { Db } from '../db/index.js';
 import { runs } from '../db/schema.js';
 import { ApiFailure } from '../errors.js';
-import { checkRunPlausibility, finishRunBody, runIdParams } from '../validation.js';
+import { leaderboardRank } from '../rank.js';
+import type { RateLimits } from '../app.js';
+import { MAX_RUN_MS, checkRunPlausibility, finishRunBody, runIdParams, startRunBody } from '../validation.js';
 
-const RUN_LIMIT = { rateLimit: { max: 30, timeWindow: '1 minute' } };
+export function runRoutes(app: FastifyInstance, db: Db, now: () => Date, limits: RateLimits): void {
+  const RUN_LIMIT = { rateLimit: { max: limits.runs, timeWindow: '1 minute' } };
 
-export function runRoutes(app: FastifyInstance, db: Db, now: () => Date): void {
   app.post('/api/runs', { config: RUN_LIMIT }, async (request, reply) => {
     const player = await requirePlayer(db, request);
-    const startedAt = now();
+    const { continues } = startRunBody.parse(request.body ?? {});
+    let startedAt = now();
+    if (continues) {
+      // A continuation inherits the original start time, so the eras already crossed still count toward it.
+      const [previous] = await db
+        .select({ startedAt: runs.startedAt, completedAt: runs.completedAt })
+        .from(runs)
+        .where(and(eq(runs.id, continues), eq(runs.playerId, player.id)))
+        .limit(1);
+      if (!previous) throw new ApiFailure(404, 'not_found');
+      if (!previous.completedAt || startedAt.getTime() - previous.startedAt.getTime() > MAX_RUN_MS) throw new ApiFailure(409, 'conflict');
+      startedAt = previous.startedAt;
+    }
     const [run] = await db.insert(runs).values({ playerId: player.id, startedAt }).returning({ id: runs.id });
     const response: StartRunResponse = { runId: run.id, startedAt: startedAt.toISOString() };
     return reply.code(201).send(response);
@@ -51,7 +65,8 @@ export function runRoutes(app: FastifyInstance, db: Db, now: () => Date): void {
 
     const response: FinishRunResponse = {
       run: { id: runId, score: body.score, eraReached: body.eraReached, outcome: body.outcome, durationMs },
-      personalBest: previous?.best == null || body.score > previous.best
+      personalBest: previous?.best == null || body.score > previous.best,
+      rank: await leaderboardRank(db, player.id, player.listed)
     };
     return response;
   });

@@ -54,6 +54,27 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: read
+    # The game talks to a real API backed by this throwaway database (see apps/web/playwright.config.ts).
+    services:
+      postgres:
+        # Pinned by digest; refresh it when bumping PostgreSQL (tag kept for readability).
+        image: postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
+        env:
+          POSTGRES_DB: chronokid_test
+          POSTGRES_USER: chronokid
+          # Throwaway database that exists only for this job; not a real credential.
+          POSTGRES_PASSWORD: ci-throwaway
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U chronokid -d chronokid_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://chronokid:ci-throwaway@localhost:5432/chronokid_test
+      # Fail instead of skipping if the full-stack tests cannot find their database.
+      REQUIRE_DB_TESTS: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

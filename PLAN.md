@@ -85,10 +85,17 @@ Status: implemented on branch `phase-3-persistence-api` (2026-10-12); pending co
 
 ### Phase 4: Client Integration
 
-Status: not started
+Status: implemented on branch `phase-4-client-integration` (2026-10-12); pending commit, CI, and review
 
 - Add display-name setup, run submission, best-score/leaderboard views, and loading/error/offline states.
 - Exit: an end-to-end browser flow persists a completed run and renders the returned result without breaking local single-player play.
+- Decisions (user, 2026-10-12): leaderboard names come from a fun name picker (`Adjective Animal Number` from shared word lists; the API rejects anything else), so no moderation is needed and no real names appear; the game asks after the first finished game; when the API is unreachable the game plays normally with a quiet notice (no retry queue).
+- Built: the game quietly creates an unlisted guest on first play (token kept in `localStorage`), registers each run when play starts, and submits on game over or victory. "Retry" registers a continuation run (`continues`) that the server times from the original start, so later finishes stay plausible. End screens show saving status, the name picker (🎲 for another name, "Add me", "No thanks"), and rank / personal best once listed. A 🏆 Leaderboard screen lists each listed player's best run and highlights yours. All network failures degrade to a notice; nothing blocks play.
+- API additions: `players.listed` (migration 0002, default false, safe on populated tables), `PATCH /api/players/me`, leaderboard rank in finish and opt-in responses (same ordering as the board), run continuation, and `RATE_LIMIT_SCALE` for automated tests only.
+- Layout: menus now scroll when taller than their space and use the whole viewport on short landscape screens (with compact type) and for the leaderboard; portrait toggles moved to the screen corner. These fixed real clipping found by the new browser tests (the Back button was unreachable once the board had several rows).
+- Verified (2026-10-12): 85 web unit tests (including the online session against a fake API: offline, server errors, refusals, expired tokens, retries, opting in), 78 API tests, and 49 Playwright runs across desktop, portrait, and landscape, including the full-stack flow against a real API and `_test` database and the offline flow. CI's browser job now has its own PostgreSQL and requires the full-stack tests.
+- Known limits: guest tokens live in `localStorage` (an XSS bug could read them; all network text is rendered with `textContent`); clearing browser data creates a new guest. There is no "leave the leaderboard" option yet.
+- Next action: Phase 5 release readiness.
 
 ### Phase 5: Release Readiness
 

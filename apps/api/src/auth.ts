@@ -20,6 +20,7 @@ export function hashToken(token: string): string {
 export interface AuthenticatedPlayer {
   id: string;
   displayName: string;
+  listed: boolean;
 }
 
 /** Resolves the player for a request's bearer token, or throws a 401 without saying why. */
@@ -28,7 +29,7 @@ export async function requirePlayer(db: Db, request: FastifyRequest): Promise<Au
   const token = header?.startsWith('Bearer ') ? header.slice('Bearer '.length) : '';
   if (!TOKEN_PATTERN.test(token)) throw new ApiFailure(401, 'unauthorized');
   const [player] = await db
-    .select({ id: players.id, displayName: players.displayName })
+    .select({ id: players.id, displayName: players.displayName, listed: players.listed })
     .from(players)
     .where(eq(players.tokenHash, hashToken(token)))
     .limit(1);

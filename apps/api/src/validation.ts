@@ -1,20 +1,28 @@
 // Request schemas and run plausibility rules. Pure functions, unit tested without a database.
 // These checks reject impossible submissions; they are not anti-cheat. The game runs in the browser,
 // so a determined player can still submit any plausible score (see SECURITY.md).
-import { DISPLAY_NAME_MAX, GAME_RULES } from '@chronokid/shared';
+import { DISPLAY_NAME_MAX, GAME_RULES, isAllowedDisplayName } from '@chronokid/shared';
 import { z } from 'zod';
 
-/** Letters (any language), digits, spaces, and a little punctuation. No emoji, symbols, or control characters. */
-const DISPLAY_NAME_PATTERN = /^[\p{L}\p{N}][\p{L}\p{N} ._'-]*$/u;
-
+/**
+ * Names must come from the shared word lists ("Brave Otter 27"), so nothing rude or personal can reach
+ * the public leaderboard. Whitespace is normalized first so harmless spacing differences still match.
+ */
 export const displayNameSchema = z
   .string()
+  .max(DISPLAY_NAME_MAX * 2)
   .transform(name => name.normalize('NFKC').replace(/\s+/g, ' ').trim())
-  .pipe(z.string().min(1).max(DISPLAY_NAME_MAX).regex(DISPLAY_NAME_PATTERN));
+  .pipe(z.string().max(DISPLAY_NAME_MAX).refine(isAllowedDisplayName));
 
 export const createPlayerBody = z.strictObject({ displayName: displayNameSchema });
 
+export const updatePlayerBody = z
+  .strictObject({ displayName: displayNameSchema.optional(), listed: z.literal(true).optional() })
+  .refine(body => body.displayName !== undefined || body.listed !== undefined);
+
 export const runIdParams = z.strictObject({ runId: z.uuid() });
+
+export const startRunBody = z.strictObject({ continues: z.uuid().optional() });
 
 const MAX_SCORE = GAME_RULES.eraCount * GAME_RULES.pickupsPerEra * GAME_RULES.pickupPoints;
 
