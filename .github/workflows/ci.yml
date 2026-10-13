@@ -172,6 +172,56 @@ jobs:
           cat "$RUNNER_TEMP/api.log"
           exit 1
 
+  container:
+    name: Container image builds and serves the game
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    services:
+      postgres:
+        # Pinned by digest; refresh it when bumping PostgreSQL (tag kept for readability).
+        image: postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
+        env:
+          POSTGRES_DB: chronokid
+          POSTGRES_USER: chronokid
+          # Throwaway database that exists only for this job; not a real credential.
+          POSTGRES_PASSWORD: ci-throwaway
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U chronokid -d chronokid"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://chronokid:ci-throwaway@127.0.0.1:5432/chronokid
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build the image (nothing is pushed or deployed)
+        run: docker build --tag chronokid:ci .
+      - name: Image runs as a non-root user
+        run: test "$(docker run --rm --entrypoint id chronokid:ci -u)" != "0"
+      - name: Run migrations from the image
+        run: docker run --rm --network host -e DATABASE_URL chronokid:ci node apps/api/dist/migrate.js
+      - name: Start the app with a read-only filesystem
+        run: docker run -d --name app --network host --read-only -e DATABASE_URL -e WEB_ORIGIN=http://127.0.0.1:3001 chronokid:ci
+      - name: Game and API respond with security headers
+        run: |
+          for _ in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3001/api/health/ready; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:3001/api/health/ready
+          curl -fsS http://127.0.0.1:3001/ | grep -q "<title>Chronokid: Era Hopper</title>"
+          curl -fsSI http://127.0.0.1:3001/ | grep -qi "^content-security-policy: default-src 'self'"
+          curl -fsS http://127.0.0.1:3001/api/leaderboard | grep -q '"entries"'
+      - name: Container logs
+        if: failure()
+        run: docker logs app || true
+
   dependencies:
     name: Dependency audit and signatures
     runs-on: ubuntu-latest

@@ -59,9 +59,10 @@ canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; 
   touch-action: pan-y;
   padding: 24px;
   background: linear-gradient(90deg, #111b1acc, #111b1a85 58%, #111b1a55);
-  transition: opacity .22s ease, visibility .22s ease;
+  /* Become visible at once when opening (so focus can move into the menu); stay visible while fading out. */
+  transition: opacity .22s ease, visibility 0s;
 }
-.overlay.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+.overlay.hidden { opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .22s ease, visibility 0s linear .22s; }
 .panel { width: min(470px, 90%); margin: auto; animation: arrive .38s both; }
 @keyframes arrive { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 .eyebrow { color: var(--lime); font-size: 11px; font-weight: 900; letter-spacing: 2px; text-transform: uppercase; }
@@ -89,6 +90,7 @@ button {
   touch-action: manipulation;
 }
 button:hover { filter: brightness(1.08); transform: translateY(-1px); }
+button:focus-visible { outline: 3px solid var(--paper); outline-offset: 3px; }
 button:active { transform: translateY(2px); box-shadow: 0 2px 0 #819b47; }
 .secondary { margin-left: 9px; border: 1px solid #fff5; color: var(--paper); background: #fff1; box-shadow: none; }
 .secondary:active { box-shadow: none; }
@@ -115,6 +117,7 @@ button:active { transform: translateY(2px); box-shadow: 0 2px 0 #819b47; }
 .board-rank { color: #fff9; }
 .board-era { color: #f6efd9a6; font-size: 11px; white-space: nowrap; }
 .board-score { text-align: right; font-weight: 800; }
+.board-note { margin: -6px 0 16px; color: #f6efd9b8; font-size: 11px; line-height: 1.4; }
 .mobile-controls { display: none; position: absolute; z-index: 2; inset: auto 16px 14px; justify-content: space-between; pointer-events: none; }
 .mobile-group { display: flex; gap: 9px; }
 .mobile-controls button {
@@ -151,6 +154,11 @@ button:active { transform: translateY(2px); box-shadow: 0 2px 0 #819b47; }
 @media (max-width: 520px) {
   .brand { display: none; }
   .topbar { justify-content: flex-end; }
+}
+/* Players who prefer reduced motion get instant menus (the canvas skips shake and flash in code). */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  #hearts.pulse { animation: none; }
 }
 /* Short landscape screens: the 16:9 game area is too short for menus, so they use the whole viewport
    with compact type, keeping the main buttons above the fold. */

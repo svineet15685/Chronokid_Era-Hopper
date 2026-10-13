@@ -14,6 +14,7 @@
 - Treat all browser state and requests as untrusted. The client is not an authority for identity, score, elapsed time, or progression. The planned MVP leaderboard is casual, not cheat-proof.
 - For API/database changes, also follow [API security instructions](instructions/api-security.instructions.md).
 - Do not run destructive commands, drop/reset databases, or add services with external costs without explicit user approval.
+- Production runs as one container (`Dockerfile`; operations in `docs/operations.md`). Keep migrations backward compatible (expand, then contract in a later release) so rollback is a redeploy of the previous image. Nothing deploys automatically; do not add deployment steps to CI without approval.
 
 ## Architecture and commands
 

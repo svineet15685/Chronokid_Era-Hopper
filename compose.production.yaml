@@ -1,0 +1,53 @@
+# Example single-host production stack: PostgreSQL, a one-off migration, and the app.
+# Not used for development (see compose.yaml) or CI. Full steps: docs/operations.md.
+#
+#   POSTGRES_PASSWORD=... PUBLIC_URL=https://game.example.com docker compose -f compose.production.yaml up -d --build
+#
+# Put a TLS-terminating reverse proxy in front of 127.0.0.1:3001 and set TRUST_PROXY=true behind it.
+services:
+  db:
+    image: postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea
+    environment:
+      POSTGRES_DB: chronokid
+      POSTGRES_USER: chronokid
+      # Use a long random URL-safe password; it is also embedded in DATABASE_URL below.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    volumes:
+      - chronokid-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chronokid -d chronokid"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  migrate:
+    image: ${CHRONOKID_IMAGE:-chronokid:latest}
+    build: .
+    command: ["node", "apps/api/dist/migrate.js"]
+    environment:
+      DATABASE_URL: postgres://chronokid:${POSTGRES_PASSWORD}@db:5432/chronokid
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  app:
+    image: ${CHRONOKID_IMAGE:-chronokid:latest}
+    environment:
+      DATABASE_URL: postgres://chronokid:${POSTGRES_PASSWORD}@db:5432/chronokid
+      WEB_ORIGIN: ${PUBLIC_URL:?Set PUBLIC_URL to the site address, for example https://game.example.com}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+    ports:
+      # Only reachable from this host; expose it through the reverse proxy.
+      - "127.0.0.1:3001:3001"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+
+volumes:
+  chronokid-data:

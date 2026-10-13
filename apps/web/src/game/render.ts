@@ -9,7 +9,12 @@ const DROPPER_WARN = 260;
 /** Wraps a parallax position into [-margin, W + span - margin). */
 const wrap = (value: number, span: number, margin: number) => ((value % (W + span)) + W + span) % (W + span) - margin;
 
-export function createRenderer(ctx: CanvasRenderingContext2D): (state: GameState) => void {
+export interface RenderOptions {
+  /** When true (the player prefers reduced motion), scares do not shake the screen. */
+  reducedMotion?: () => boolean;
+}
+
+export function createRenderer(ctx: CanvasRenderingContext2D, options: RenderOptions = {}): (state: GameState) => void {
   function rect(x: number, y: number, w: number, h: number, color: string): void {
     ctx.fillStyle = color;
     ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
@@ -465,7 +470,7 @@ export function createRenderer(ctx: CanvasRenderingContext2D): (state: GameState
     const era = ERAS[state.eraIndex];
     const scare = state.scare;
     ctx.save();
-    if (scare) {
+    if (scare && !options.reducedMotion?.()) {
       const shake = 14 * Math.max(0, 1 - scare.t / 0.7);
       ctx.translate(Math.sin(scare.t * 97) * shake, Math.cos(scare.t * 83) * shake);
     }
