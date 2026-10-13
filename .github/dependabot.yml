@@ -12,6 +12,19 @@ updates:
     groups:
       npm-minor-and-patch:
         update-types: [minor, patch]
+  # Base images in the Dockerfile and the production Compose file (pinned by digest).
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+  - package-ecosystem: docker-compose
+    directory: "/"
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
   - package-ecosystem: github-actions
     directory: "/"
     schedule:

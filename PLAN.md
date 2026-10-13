@@ -99,10 +99,16 @@ Status: implemented on branch `phase-4-client-integration` (2026-10-12); pending
 
 ### Phase 5: Release Readiness
 
-Status: not started
+Status: implemented on branch `phase-5-release-readiness` (2026-10-13); pending commit, CI, and review. Deployment itself is deliberately not done; the user will configure hosting later.
 
 - Complete accessibility/responsive checks, security/dependency review, deployment configuration, backups/migration runbook, and operational health checks.
 - Exit: CI is green, secrets are configured outside source control, deployment and rollback are documented, and score-integrity limitations are visible to operators/users.
+- Decision (user, 2026-10-13): one container image in which the API serves the built game (same origin), rather than a separate static host.
+- Built: `STATIC_DIR` static serving (`@fastify/static`, one route per built file, hashed assets cached for a year, page `no-cache`); security headers on every response (strict CSP without `unsafe-inline`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Permissions-Policy`, COOP); runtime-only migration script (`node apps/api/dist/migrate.js`); multi-stage `Dockerfile` (digest-pinned Alpine Node 22, `npm ci --ignore-scripts`, dev deps pruned, non-root, read-only files, HEALTHCHECK); `.dockerignore`; example `compose.production.yaml` (migrate-then-app, read-only, no capabilities, localhost-only port); Dependabot for Docker and Compose images; CI job **Container image builds and serves the game**.
+- Accessibility: axe (WCAG 2.1 A/AA) checks on the start, game-over, and leaderboard screens; keyboard-only flow test; end screens focus their main button (fixed a visibility transition that made the menus unfocusable for one frame); visible focus rings; leaderboard is a labelled modal dialog with Escape to close; `prefers-reduced-motion` disables menu animation, scare screen shake, flash, and pop-in.
+- Users see the casual-score limitation on the leaderboard screen; operators in `docs/operations.md`, which also covers configuration, least-privilege database roles, deploy, rollback (forward-only, backward-compatible migrations), backups with a monthly restore drill, health checks, TLS/HSTS at the proxy, single-instance rate limits, maintenance SQL, monitoring, password rotation, and a release checklist.
+- Verified (2026-10-13): a production build served by the built API loads with the CSP and no browser console errors, and the test hook is absent; the Dockerfile's steps rehearsed outside Docker (clean `npm ci --ignore-scripts`, build, prune to 46 MB, migrate and serve from the runtime layout). 81 API tests, 85 web tests, and 59 Playwright runs pass. The image itself is first built by CI, since Docker is not installed locally.
+- Next action: push, confirm the new container job and the rest of CI pass, then work through the release checklist in `docs/operations.md` when choosing a host.
 
 ## Decisions and Scope Boundaries
 

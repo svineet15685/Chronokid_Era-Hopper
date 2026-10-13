@@ -67,6 +67,14 @@ Errors are always `{ "error": "<code>" }` with a generic code (`invalid_request`
 
 API integration tests run against a real PostgreSQL database named by `TEST_DATABASE_URL`. They wipe its tables, so the database name must end in `_test` (the tests refuse to run otherwise). Without `TEST_DATABASE_URL` they are skipped locally; CI sets `REQUIRE_DB_TESTS=1` so they can never be skipped there.
 
+## Production and deployment
+
+The app ships as one container image: the API also serves the built game, so the game and API share an address. Nothing deploys automatically.
+
+- Build: `docker build --tag chronokid:<tag> .` (see [Dockerfile](Dockerfile)).
+- Try the production setup on one machine: `POSTGRES_PASSWORD=<random> PUBLIC_URL=http://localhost:3001 docker compose -f compose.production.yaml up --build`.
+- Configuration, deploying, rolling back, backups, health checks, and the release checklist: [docs/operations.md](docs/operations.md).
+
 ## CI and security checks
 
 GitHub Actions runs on every pull request and every push to `main`. Nothing is deployed.
@@ -74,8 +82,9 @@ GitHub Actions runs on every pull request and every push to `main`. Nothing is d
 | Workflow job | What it checks |
 | --- | --- |
 | Lint, type-check, build, unit tests | oxlint, TypeScript, production builds, Vitest, and that generated migrations are committed |
-| Browser tests (desktop and mobile) | Playwright on desktop, portrait phone, and landscape phone; the HTML report is uploaded when a test fails |
+| Browser tests (desktop and mobile) | Playwright on desktop, portrait phone, and landscape phone, including automated accessibility checks (axe, WCAG 2.1 A/AA) and keyboard-only play; the HTML report is uploaded when a test fails |
 | Migrations and API readiness (PostgreSQL) | Migrations apply to an empty PostgreSQL 16 database and re-apply as a no-op; API integration tests run against it; the built API starts and reports ready |
+| Container image builds and serves the game | Builds the Docker image, checks it runs as non-root with a read-only filesystem, runs migrations from it, and checks the served page, security headers, and API |
 | Dependency audit and signatures | No known vulnerabilities in production dependencies, no high/critical ones anywhere, and npm registry signatures verify |
 | Dependency review (pull requests) | Blocks pull requests that add dependencies with known moderate or worse vulnerabilities |
 | Workflow security lint (zizmor) | Insecure GitHub Actions patterns (unpinned actions, credential leaks, injection) |

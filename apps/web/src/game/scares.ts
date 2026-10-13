@@ -17,7 +17,8 @@ export function popScale(t: number, total: number): number {
 const CREATURE_W = 600;
 const CREATURE_H = 520;
 
-export function drawScare(ctx: CanvasRenderingContext2D, kind: ScareKind, t: number, total: number, width: number, height: number): void {
+/** `still` draws the creature at full size without the pop-in and rumble (for reduced motion). */
+export function drawScare(ctx: CanvasRenderingContext2D, kind: ScareKind, t: number, total: number, width: number, height: number, still = false): void {
   const fill = (color: string) => { ctx.fillStyle = color; };
   const circle = (x: number, y: number, r: number, color: string) => { fill(color); ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill(); };
   const oval = (x: number, y: number, rx: number, ry: number, color: string) => { fill(color); ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, TAU); ctx.fill(); };
@@ -32,7 +33,7 @@ export function drawScare(ctx: CanvasRenderingContext2D, kind: ScareKind, t: num
   };
   const eye = (x: number, y: number, r: number, iris: string) => { circle(x, y, r, iris); circle(x + r * 0.2, y, r * 0.45, '#111'); circle(x - r * 0.3, y - r * 0.35, r * 0.2, '#fff'); };
 
-  const scale = popScale(t, total);
+  const scale = still ? 1 : popScale(t, total);
   if (scale <= 0) return;
   ctx.save();
   const fit = Math.min(width / CREATURE_W, height / CREATURE_H) * 0.95;
@@ -186,7 +187,7 @@ export function drawScare(ctx: CanvasRenderingContext2D, kind: ScareKind, t: num
 }
 
 /** Draws scares on a viewport-sized canvas layered over the whole page; hidden when no scare is playing. */
-export function createScareLayer(canvas: HTMLCanvasElement): (scare: Scare | null) => void {
+export function createScareLayer(canvas: HTMLCanvasElement, options: { reducedMotion?: () => boolean } = {}): (scare: Scare | null) => void {
   const ctx = canvas.getContext('2d');
   return scare => {
     if (!scare || !ctx) {
@@ -207,8 +208,10 @@ export function createScareLayer(canvas: HTMLCanvasElement): (scare: Scare | nul
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, width, height);
     ctx.globalAlpha = 1;
-    drawScare(ctx, scare.kind, scare.t, SCARE_TIME, width, height);
-    const flash = Math.max(0, 0.7 - scare.t * 5);
+    const reduced = options.reducedMotion?.() ?? false;
+    drawScare(ctx, scare.kind, scare.t, SCARE_TIME, width, height, reduced);
+    // No white flash for players who prefer reduced motion.
+    const flash = reduced ? 0 : Math.max(0, 0.7 - scare.t * 5);
     if (flash > 0) {
       ctx.globalAlpha = flash;
       ctx.fillStyle = '#fff';

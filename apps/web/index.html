@@ -31,12 +31,13 @@
           </div>
         </div>
       </section>
-      <section class="overlay board-overlay hidden" id="board" aria-label="Leaderboard">
+      <section class="overlay board-overlay hidden" id="board" role="dialog" aria-modal="true" aria-labelledby="board-title">
         <div class="panel">
           <div class="eyebrow">Hall of time travelers</div>
-          <h1>Leader<br /><em>board</em></h1>
+          <h1 id="board-title">Leader<br /><em>board</em></h1>
           <p class="subtitle" id="board-status" aria-live="polite">Loading…</p>
           <ol class="board" id="board-list"></ol>
+          <p class="board-note">Just for fun: the game runs on your device, so scores can't be checked. Treat them as friendly bragging rights.</p>
           <div class="online" id="board-join" aria-live="polite"></div>
           <button id="board-close" type="button">Back</button>
         </div>

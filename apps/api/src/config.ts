@@ -12,7 +12,9 @@ const envSchema = z.object({
   // Set to true only when the API runs behind a trusted reverse proxy that sets X-Forwarded-For.
   TRUST_PROXY: z.enum(['true', 'false']).default('false').transform(value => value === 'true'),
   // Multiplies every rate limit. Raise it only for automated tests that make many requests from one IP.
-  RATE_LIMIT_SCALE: z.coerce.number().int().min(1).max(1000).default(1)
+  RATE_LIMIT_SCALE: z.coerce.number().int().min(1).max(1000).default(1),
+  // Absolute path to the built game (apps/web/dist). Set in production so one server hosts the game and API.
+  STATIC_DIR: z.string().min(1).optional()
 });
 
 export const config = envSchema.parse(process.env);

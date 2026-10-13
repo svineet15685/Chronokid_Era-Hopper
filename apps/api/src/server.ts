@@ -6,7 +6,8 @@ const app = await buildApp({
   rateLimits: scaleRateLimits(config.RATE_LIMIT_SCALE),
   database: createDatabase(config.DATABASE_URL),
   webOrigin: config.WEB_ORIGIN,
-  trustProxy: config.TRUST_PROXY
+  trustProxy: config.TRUST_PROXY,
+  staticDir: config.STATIC_DIR
 });
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {

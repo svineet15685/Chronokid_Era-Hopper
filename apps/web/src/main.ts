@@ -51,8 +51,10 @@ const boardClose = byId<HTMLButtonElement>('board-close');
 
 const state: GameState = createGame();
 const sound = createSound();
-const draw = createRenderer(ctx);
-const drawScareLayer = createScareLayer(byId<HTMLCanvasElement>('scare-layer'));
+/** Respects the device setting live, so changing it takes effect without a reload. */
+const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const draw = createRenderer(ctx, { reducedMotion });
+const drawScareLayer = createScareLayer(byId<HTMLCanvasElement>('scare-layer'), { reducedMotion });
 const online = new OnlineSession();
 let actionHandler = start;
 /** Bumped whenever a menu changes, so slow network replies never write into a newer screen. */
@@ -120,6 +122,9 @@ function showOverlay(): void {
     restartButton.hidden = false;
     restartButton.textContent = 'Start Over';
   }
+  // Keyboard players land on the main choice, so Enter continues. The start screen is skipped
+  // because Enter already starts the game there and would otherwise fire twice.
+  if (state.phase !== 'start') (actionButton.hidden ? restartButton : actionButton).focus({ preventScroll: true });
 }
 
 function hideOverlay(): void {
