@@ -1,7 +1,9 @@
 // Canvas drawing. Stone, Medieval, and Future art is ported unchanged from the prototype.
 // Jump scare creatures are drawn full screen by scares.ts; the game view only shakes.
 import { CHECKPOINT_X, ERAS, FLOOR, H, W, WORLD_END, type Era } from './config';
-import { PARTICLE_LIFE, POPUP_LIFE, type GameState, type Hazard, type Platform } from './simulation';
+import { DOUBLE_JUMP_TIME, FREEZE_TIME, MAGNET_TIME, PARTICLE_LIFE, POPUP_LIFE, POWER_UP_SIZE, type GameState, type Hazard, type Platform, type PowerKind } from './simulation';
+
+const POWER_COLORS: Record<PowerKind, string> = { shield: '#6fd3ff', freeze: '#b8f1ff', magnet: '#ff6f7d', doubleJump: '#ffd84d' };
 
 const TAU = Math.PI * 2;
 /** Droppers start wobbling when the player is this close. */
@@ -459,6 +461,83 @@ export function createRenderer(ctx: CanvasRenderingContext2D, options: RenderOpt
     rect(x + 19, FLOOR - 5, 25, 5, '#1b2826');
   }
 
+  /** Small icon for a power-up kind, centred on (x, y). */
+  function powerIcon(kind: PowerKind, x: number, y: number, size: number): void {
+    const u = size / 10;
+    ctx.save(); ctx.translate(x, y);
+    if (kind === 'shield') {
+      poly('#1b4f72', 0, -4 * u, 3.5 * u, -2.5 * u, 3 * u, 1.5 * u, 0, 4 * u, -3 * u, 1.5 * u, -3.5 * u, -2.5 * u);
+      rect(-0.5 * u, -2.5 * u, u, 5 * u, '#6fd3ff');
+    } else if (kind === 'freeze') {
+      ctx.strokeStyle = '#1b4f72'; ctx.lineWidth = Math.max(2, u * 0.9); ctx.lineCap = 'round'; ctx.beginPath();
+      for (let i = 0; i < 3; i++) { const a = (i * Math.PI) / 3; ctx.moveTo(Math.cos(a) * -4 * u, Math.sin(a) * -4 * u); ctx.lineTo(Math.cos(a) * 4 * u, Math.sin(a) * 4 * u); }
+      ctx.stroke();
+    } else if (kind === 'magnet') {
+      ctx.strokeStyle = '#7a1d2a'; ctx.lineWidth = 2.2 * u; ctx.beginPath(); ctx.arc(0, -0.5 * u, 2.6 * u, Math.PI, 0); ctx.stroke();
+      rect(-3.7 * u, -0.5 * u, 2.2 * u, 3.5 * u, '#7a1d2a'); rect(1.5 * u, -0.5 * u, 2.2 * u, 3.5 * u, '#7a1d2a');
+      rect(-3.7 * u, 2 * u, 2.2 * u, 1.2 * u, '#f4f4f4'); rect(1.5 * u, 2 * u, 2.2 * u, 1.2 * u, '#f4f4f4');
+    } else {
+      poly('#7a5a00', -3 * u, 3.5 * u, 0, -0.5 * u, 3 * u, 3.5 * u); poly('#7a5a00', -3 * u, 0, 0, -4 * u, 3 * u, 0);
+    }
+    ctx.restore();
+  }
+
+  function drawPowerUps(state: GameState): void {
+    for (const powerup of state.powerups) {
+      if (powerup.taken) continue;
+      const x = powerup.x - state.cameraX;
+      if (x < -40 || x > W + 40) continue;
+      const y = powerup.y + Math.sin(state.elapsed * 3 + powerup.x) * 4;
+      const half = POWER_UP_SIZE / 2;
+      ctx.globalAlpha = 0.35 + 0.15 * Math.sin(state.elapsed * 6);
+      circle(x, y, half + 8, POWER_COLORS[powerup.kind]);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.roundRect(x - half, y - half, POWER_UP_SIZE, POWER_UP_SIZE, 6); ctx.fill();
+      ctx.strokeStyle = POWER_COLORS[powerup.kind]; ctx.lineWidth = 3; ctx.stroke();
+      powerIcon(powerup.kind, x, y, POWER_UP_SIZE * 0.8);
+    }
+  }
+
+  /** Icy tint over hazards while time is frozen. */
+  function drawFreezeTint(state: GameState): void {
+    if (state.effects.freeze <= 0) return;
+    ctx.globalAlpha = 0.45;
+    for (const hazard of state.hazards) {
+      const x = hazard.x - state.cameraX;
+      if (x + hazard.w < -20 || x > W + 20) continue;
+      ctx.fillStyle = '#c9f4ff'; ctx.beginPath(); ctx.roundRect(x - 3, hazard.y - 3, hazard.w + 6, hazard.h + 6, 6); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawShieldBubble(state: GameState): void {
+    if (!state.effects.shield) return;
+    const { player } = state;
+    const cx = player.x + player.w / 2 - state.cameraX;
+    const cy = player.y + player.h / 2;
+    ctx.globalAlpha = 0.25; circle(cx, cy, 34, '#6fd3ff');
+    ctx.globalAlpha = 0.8; ctx.strokeStyle = '#bdefff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, 34 + Math.sin(state.elapsed * 8) * 1.5, 0, TAU); ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  /** Active effects as icons with a draining bar, bottom-left of the play area. */
+  function drawEffectBadges(state: GameState): void {
+    const { effects } = state;
+    const badges: [PowerKind, number][] = [];
+    if (effects.shield) badges.push(['shield', 1]);
+    if (effects.freeze > 0) badges.push(['freeze', effects.freeze / FREEZE_TIME]);
+    if (effects.magnet > 0) badges.push(['magnet', effects.magnet / MAGNET_TIME]);
+    if (effects.doubleJump > 0) badges.push(['doubleJump', effects.doubleJump / DOUBLE_JUMP_TIME]);
+    badges.forEach(([kind, left], i) => {
+      const x = 22 + i * 46;
+      const y = H - 44;
+      ctx.fillStyle = '#10201fd9'; ctx.beginPath(); ctx.roundRect(x - 4, y - 4, 40, 34, 6); ctx.fill();
+      powerIcon(kind, x + 16, y + 11, 18);
+      rect(x, y + 22, 32, 4, '#ffffff33');
+      rect(x, y + 22, 32 * left, 4, POWER_COLORS[kind]);
+    });
+  }
+
   function drawFlags(state: GameState, era: Era): void {
     drawFlag(WORLD_END - state.cameraX, era.accent, 94);
     // Checkpoint flag sits low and grey until reached, then flies in the era colour.
@@ -479,9 +558,12 @@ export function createRenderer(ctx: CanvasRenderingContext2D, options: RenderOpt
     drawFlags(state, era);
     drawPickups(state, era);
     drawHazards(state);
+    drawFreezeTint(state);
+    drawPowerUps(state);
     for (const p of state.particles) { ctx.globalAlpha = Math.max(0, p.life / PARTICLE_LIFE); rect(p.x - state.cameraX, p.y, 4, 4, p.color); }
     ctx.globalAlpha = 1;
     drawPlayer(state);
+    drawShieldBubble(state);
     for (const popup of state.popups) {
       ctx.globalAlpha = Math.min(1, popup.life / (POPUP_LIFE * 0.5));
       ctx.font = '900 26px "Trebuchet MS", "Segoe UI", sans-serif';
@@ -491,6 +573,7 @@ export function createRenderer(ctx: CanvasRenderingContext2D, options: RenderOpt
       ctx.fillStyle = '#7dff8a'; ctx.fillText(popup.text, popup.x - state.cameraX, popup.y);
     }
     ctx.globalAlpha = 1;
+    if (state.phase === 'playing') drawEffectBadges(state);
     if (state.phase === 'playing') {
       const progress = Math.min(1, state.player.x / WORLD_END);
       rect(0, H - 4, W * progress, 4, era.accent);

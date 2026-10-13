@@ -49,6 +49,12 @@ test.describe('accessibility', () => {
     await expect(page.locator('#leaderboard-open')).toBeFocused();
   });
 
+  test('era map screen', async ({ page }) => {
+    await page.locator('#eras-open').click();
+    await expect(page.locator('.era-card')).toHaveCount(10);
+    await expectNoViolations(page);
+  });
+
   test('leaderboard screen', async ({ page }) => {
     await page.locator('#leaderboard-open').click();
     await expect(page.locator('.board-row')).toHaveCount(1);

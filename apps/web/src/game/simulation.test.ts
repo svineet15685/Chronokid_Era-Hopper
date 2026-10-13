@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { CHECKPOINT_X, ERAS, FLOOR, H, HAZARD_XS, SKINS, START_X, WORLD_END, type EraId } from './config';
 import { CHECKPOINT_SAFE, FINISH_SAFE, START_SAFE, levelLayout } from './level';
 import {
-  CRUMBLE_TIME, SCARE_TIME, advanceEra, beginGame, buildLevel, createGame, frameDelta, groundAt, requestJump, retryEra, step,
+  CRUMBLE_TIME, DOUBLE_JUMP_TIME, FREEZE_TIME, MAGNET_TIME, SCARE_TIME, STAR_PICKUPS, advanceEra, beginGame, buildLevel, createGame,
+  frameDelta, groundAt, requestJump, retryEra, starsFor, step, type PowerKind,
   type GameEvent, type GameState
 } from './simulation';
 
@@ -423,6 +424,161 @@ describe('progression', () => {
     beginGame(state);
     expect(state).toMatchObject({ phase: 'playing', eraIndex: 0, score: 0, levelStartScore: 0, lives: 3, elapsed: 0 });
     expect(state.pickups.every(p => !p.taken)).toBe(true);
+  });
+});
+
+/** Puts the given power-up right on the player so the next step collects it. */
+function grab(state: GameState, kind: PowerKind): GameEvent[] {
+  const powerup = state.powerups[0];
+  powerup.kind = kind;
+  powerup.x = state.player.x + state.player.w / 2;
+  powerup.y = state.player.y + state.player.h / 2;
+  return step(state, idle, DT);
+}
+
+describe('power-ups', () => {
+  it('places two per era and rotates the kinds between eras', () => {
+    const kinds = ERAS.map((_, i) => {
+      const state = createGame();
+      buildLevel(state, i);
+      expect(state.powerups).toHaveLength(2);
+      return state.powerups.map(p => p.kind).join('+');
+    });
+    expect(new Set(kinds).size).toBeGreaterThan(1);
+  });
+
+  it('keeps power-ups clear of the pickups', () => {
+    const state = createGame();
+    for (const powerup of state.powerups) {
+      for (const pickup of state.pickups) expect(Math.hypot(pickup.x - powerup.x, pickup.y - powerup.y)).toBeGreaterThan(40);
+    }
+  });
+
+  it('collects a power-up once and announces it', () => {
+    const state = clearArea(playing());
+    const events = grab(state, 'magnet');
+    expect(events).toContain('powerup');
+    expect(state.powerups[0].taken).toBe(true);
+    expect(state.popups.map(p => p.text)).toContain('MAGNET!');
+    expect(step(state, idle, DT)).not.toContain('powerup');
+  });
+
+  it('shield absorbs one hit without losing a life', () => {
+    const state = playing('medieval');
+    state.pickups = [];
+    const spikes = state.hazards[0];
+    state.hazards = [spikes];
+    grab(state, 'shield');
+    expect(state.effects.shield).toBe(true);
+    state.player.x = spikes.x;
+    state.player.y = FLOOR - state.player.h;
+    expect(step(state, idle, DT)).toEqual(['shieldBreak']);
+    expect(state).toMatchObject({ lives: 3, eraHits: 0 });
+    expect(state.effects.shield).toBe(false);
+    state.player.invulnerable = 0;
+    state.player.x = spikes.x;
+    state.player.y = FLOOR - state.player.h;
+    expect(step(state, idle, DT)).toContain('hit');
+    expect(state.lives).toBe(2);
+  });
+
+  it('time freeze stops hazards for a while, then they move again', () => {
+    const state = clearArea(playing());
+    buildLevel(state, 0);
+    state.pickups = [];
+    const boulder = state.hazards[0];
+    grab(state, 'freeze');
+    const frozenAt = boulder.x;
+    run(state, idle, Math.floor((FREEZE_TIME - 0.1) / DT));
+    expect(boulder.x).toBe(frozenAt);
+    run(state, idle, 30);
+    expect(boulder.x).not.toBe(frozenAt);
+  });
+
+  it('magnet pulls nearby pickups toward the player, then wears off', () => {
+    const state = playing();
+    state.hazards = [];
+    grab(state, 'magnet');
+    const pickup = state.pickups.find(p => !p.taken && p.x > state.player.x + 60);
+    if (!pickup) throw new Error('no pickup ahead');
+    pickup.x = state.player.x + 120;
+    pickup.y = state.player.y;
+    const startX = pickup.x;
+    step(state, idle, DT);
+    expect(pickup.x).toBeLessThan(startX);
+    expect(run(state, idle, 60)).toContain('collect');
+    run(state, idle, Math.ceil(MAGNET_TIME / DT));
+    expect(state.effects.magnet).toBe(0);
+  });
+
+  it('double jump allows one extra jump in mid-air until landing', () => {
+    const state = clearArea(playing());
+    grab(state, 'doubleJump');
+    requestJump(state);
+    expect(step(state, idle, DT)).toContain('jump');
+    run(state, idle, 10);
+    requestJump(state);
+    expect(step(state, idle, DT)).toContain('jump');
+    expect(state.player.vy).toBeLessThan(0);
+    run(state, idle, 5);
+    requestJump(state);
+    expect(step(state, idle, DT)).not.toContain('jump');
+    expect(state.effects.doubleJump).toBeGreaterThan(DOUBLE_JUMP_TIME - 1);
+  });
+
+  it('without double jump there is no mid-air jump', () => {
+    const state = clearArea(playing());
+    requestJump(state);
+    step(state, idle, DT);
+    run(state, idle, 10);
+    requestJump(state);
+    expect(step(state, idle, DT)).not.toContain('jump');
+  });
+
+  it('effects reset when a new era begins', () => {
+    const state = clearArea(playing());
+    grab(state, 'shield');
+    state.phase = 'clear';
+    advanceEra(state);
+    expect(state.effects).toMatchObject({ shield: false, freeze: 0, magnet: 0, doubleJump: 0 });
+  });
+});
+
+describe('star ratings', () => {
+  it('gives 1 star for clearing, +1 for collecting, +1 for no damage', () => {
+    expect(starsFor(0, 3)).toBe(1);
+    expect(starsFor(STAR_PICKUPS, 2)).toBe(2);
+    expect(starsFor(STAR_PICKUPS - 1, 0)).toBe(2);
+    expect(starsFor(25, 0)).toBe(3);
+  });
+
+  it('rates the era when it is cleared, counting this era only', () => {
+    const state = clearArea(playing());
+    state.eraPickups = STAR_PICKUPS;
+    state.player.x = WORLD_END - 62;
+    expect(step(state, right, DT)).toContain('clear');
+    expect(state.lastStars).toBe(3);
+    advanceEra(state);
+    expect(state).toMatchObject({ eraPickups: 0, eraHits: 0, lastStars: 0 });
+  });
+
+  it('counts real hits but not shield blocks', () => {
+    const state = playing('medieval');
+    state.pickups = [];
+    state.hazards = [state.hazards[0]];
+    state.player.x = state.hazards[0].x;
+    step(state, idle, DT);
+    expect(state.eraHits).toBe(1);
+  });
+});
+
+describe('practice mode', () => {
+  it('starts any era fresh, marked as practice', () => {
+    const state = createGame();
+    beginGame(state, 6, 'practice');
+    expect(state).toMatchObject({ phase: 'playing', eraIndex: 6, mode: 'practice', score: 0, lives: 3, levelStartScore: 0 });
+    beginGame(state);
+    expect(state).toMatchObject({ eraIndex: 0, mode: 'campaign' });
   });
 });
 

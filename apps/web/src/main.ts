@@ -5,8 +5,9 @@ import { CHECKPOINT_X, ERAS, LAST_ERA, START_LIVES } from './game/config';
 import { bindInput } from './game/input';
 import { createRenderer } from './game/render';
 import { createScareLayer } from './game/scares';
-import { advanceEra, beginGame, createGame, frameDelta, requestJump, retryEra, step, type GameState } from './game/simulation';
+import { STAR_PICKUPS, advanceEra, beginGame, createGame, frameDelta, requestJump, retryEra, step, type GameState } from './game/simulation';
 import { OnlineSession } from './online/session';
+import { ProgressTracker } from './progress';
 import { renderFinishResult, renderJoinPrompt, renderLeaderboard, renderNote } from './ui/online-panel';
 
 function byId<T extends HTMLElement>(id: string): T {
@@ -48,6 +49,13 @@ const boardList = byId('board-list');
 const boardStatus = byId('board-status');
 const boardJoin = byId('board-join');
 const boardClose = byId<HTMLButtonElement>('board-close');
+const starsEl = byId('stars');
+const starRowEl = byId('star-row');
+const starHintEl = byId('star-hint');
+const erasButton = byId<HTMLButtonElement>('eras-open');
+const mapOverlay = byId('map');
+const eraGrid = byId('era-grid');
+const mapClose = byId<HTMLButtonElement>('map-close');
 
 const state: GameState = createGame();
 const sound = createSound();
@@ -56,6 +64,9 @@ const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)'
 const draw = createRenderer(ctx, { reducedMotion });
 const drawScareLayer = createScareLayer(byId<HTMLCanvasElement>('scare-layer'), { reducedMotion });
 const online = new OnlineSession();
+const progress = new ProgressTracker();
+/** Whether the era just cleared beat its previous best stars. */
+let newBestStars = false;
 let actionHandler = start;
 /** Bumped whenever a menu changes, so slow network replies never write into a newer screen. */
 let screen = 0;
@@ -86,6 +97,8 @@ function showOverlay(): void {
   screen++;
   onlineEl.replaceChildren();
   leaderboardButton.hidden = state.phase === 'clear';
+  erasButton.hidden = state.phase === 'clear';
+  starsEl.hidden = state.phase !== 'clear';
   overlay.classList.remove('hidden');
   actionButton.hidden = false;
   restartButton.hidden = true;
@@ -105,6 +118,7 @@ function showOverlay(): void {
       : `Next stop: ${ERAS[state.eraIndex + 1].name.toLowerCase()}. The rules are about to change.`;
     actionButton.textContent = last ? 'See Final Score' : 'Advance to Next Era';
     actionHandler = advance;
+    renderStars();
   } else if (state.phase === 'victory') {
     eyebrowEl.textContent = 'ALL AGES, ONE LEGEND';
     setTitle('Time well', 'hopped.');
@@ -127,6 +141,28 @@ function showOverlay(): void {
   if (state.phase !== 'start') (actionButton.hidden ? restartButton : actionButton).focus({ preventScroll: true });
 }
 
+/** Fills an element with three stars, the unearned ones dimmed. */
+function renderStarIcons(target: HTMLElement, stars: number): void {
+  target.replaceChildren(...[0, 1, 2].map(i => {
+    const star = document.createElement('span');
+    star.textContent = '★';
+    if (i >= stars) star.className = 'star-off';
+    return star;
+  }));
+  target.setAttribute('aria-label', `${stars} of 3 stars`);
+}
+
+/** Star rating for the era just cleared, with tips for any stars missed. */
+function renderStars(): void {
+  renderStarIcons(starRowEl, state.lastStars);
+  const tips = [];
+  if (state.eraPickups < STAR_PICKUPS) tips.push(`collect ${STAR_PICKUPS} pickups`);
+  if (state.eraHits > 0) tips.push('take no damage');
+  starHintEl.textContent = tips.length
+    ? `${newBestStars ? 'New best! ' : ''}Next time, ${tips.join(' and ')} for more stars.`
+    : `${newBestStars ? 'New best! ' : ''}Perfect era!`;
+}
+
 function hideOverlay(): void {
   screen++;
   overlay.classList.add('hidden');
@@ -147,6 +183,7 @@ function start(): void {
 function advance(): void {
   sound.play('advance');
   advanceEra(state);
+  progress.reach(state.eraIndex);
   updateHud();
   if (state.phase === 'victory') {
     showOverlay();
@@ -156,7 +193,7 @@ function advance(): void {
 
 function retry(): void {
   sound.start();
-  online.continueRun();
+  if (state.mode === 'campaign') online.continueRun();
   retryEra(state);
   updateHud();
   hideOverlay();
@@ -164,6 +201,10 @@ function retry(): void {
 
 /** Sends the finished run in the background and shows the outcome on the end screen. */
 async function submitRun(outcome: RunOutcome): Promise<void> {
+  if (state.mode === 'practice') {
+    renderNote(onlineEl, "Practice run: it doesn't go on the leaderboard.");
+    return;
+  }
   const shownOn = screen;
   renderNote(onlineEl, 'Saving your score…');
   const result = await online.finishRun({ score: state.score, eraReached: state.eraIndex + 1, outcome });
@@ -192,6 +233,51 @@ async function openBoard(): Promise<void> {
   }
 }
 
+/** Starts any reached era as practice, from the era map. */
+function startPractice(eraIndex: number): void {
+  closeMap(false);
+  sound.start();
+  beginGame(state, eraIndex, 'practice');
+  updateHud();
+  hideOverlay();
+}
+
+function renderMap(): void {
+  const { stars } = progress.current;
+  eraGrid.replaceChildren(...ERAS.map((era, i) => {
+    const item = document.createElement('li');
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'era-card';
+    const unlocked = progress.isUnlocked(i);
+    card.disabled = !unlocked;
+    const num = document.createElement('span');
+    num.className = 'era-num';
+    num.textContent = String(i + 1);
+    const name = document.createElement('span');
+    name.textContent = era.name;
+    const badge = document.createElement('span');
+    badge.className = 'era-stars';
+    if (unlocked) renderStarIcons(badge, stars[i]); else badge.textContent = '🔒';
+    card.append(num, name, badge);
+    card.setAttribute('aria-label', unlocked ? `Era ${i + 1}, ${era.name}, ${stars[i]} of 3 stars` : `Era ${i + 1}, ${era.name}, locked`);
+    card.addEventListener('click', () => startPractice(i));
+    item.append(card);
+    return item;
+  }));
+}
+
+function openMap(): void {
+  renderMap();
+  mapOverlay.classList.remove('hidden');
+  eraGrid.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus({ preventScroll: true });
+}
+
+function closeMap(restoreFocus = true): void {
+  mapOverlay.classList.add('hidden');
+  if (restoreFocus) erasButton.focus({ preventScroll: true });
+}
+
 function closeBoard(): void {
   boardView++;
   boardOverlay.classList.add('hidden');
@@ -206,9 +292,12 @@ function renderToggle(button: HTMLButtonElement, on: boolean, label: string, onT
 
 actionButton.addEventListener('click', () => actionHandler());
 leaderboardButton.addEventListener('click', () => void openBoard());
+erasButton.addEventListener('click', openMap);
+mapClose.addEventListener('click', () => closeMap());
 boardClose.addEventListener('click', closeBoard);
 window.addEventListener('keydown', event => {
   if (event.key === 'Escape' && !boardOverlay.classList.contains('hidden')) closeBoard();
+  if (event.key === 'Escape' && !mapOverlay.classList.contains('hidden')) closeMap();
 });
 restartButton.addEventListener('click', start);
 
@@ -232,7 +321,7 @@ scaresButton.addEventListener('click', () => {
 
 const keys = bindInput(document, {
   onJump: () => requestJump(state),
-  onEnter: () => { if (state.phase === 'start' && boardOverlay.classList.contains('hidden')) start(); }
+  onEnter: () => { if (state.phase === 'start' && boardOverlay.classList.contains('hidden') && mapOverlay.classList.contains('hidden')) start(); }
 });
 
 let lastTime = 0;
@@ -240,10 +329,14 @@ function frame(timestamp: number): void {
   const dt = frameDelta(timestamp, lastTime);
   lastTime = timestamp;
   for (const event of step(state, keys, dt)) {
-    if (event === 'jump' || event === 'collect' || event === 'extraLife' || event === 'hit' || event === 'checkpoint') sound.play(event);
+    if (event === 'jump' || event === 'collect' || event === 'extraLife' || event === 'hit' || event === 'checkpoint' || event === 'powerup' || event === 'shieldBreak') sound.play(event);
     if (event === 'extraLife') pulseHearts();
     if (event === 'scare' && state.scare) sound.scare(state.scare.kind);
     if (event === 'collect' || event === 'hit') updateHud();
+    if (event === 'clear') {
+      newBestStars = progress.recordClear(state.eraIndex, state.lastStars);
+      sound.play('star');
+    }
     if (event === 'clear' || event === 'gameover') showOverlay();
     if (event === 'gameover') void submitRun('gameover');
   }

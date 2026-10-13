@@ -5,7 +5,7 @@ import { GAME_RULES } from '@chronokid/shared';
 import { levelLayout, type HazardSlot } from './level';
 
 export type Phase = 'start' | 'playing' | 'clear' | 'victory' | 'gameover';
-export type GameEvent = 'jump' | 'collect' | 'extraLife' | 'hit' | 'clear' | 'gameover' | 'checkpoint' | 'scare';
+export type GameEvent = 'jump' | 'collect' | 'extraLife' | 'hit' | 'clear' | 'gameover' | 'checkpoint' | 'scare' | 'powerup' | 'shieldBreak';
 
 export interface Box { x: number; y: number; w: number; h: number }
 
@@ -49,6 +49,22 @@ export interface Particle { x: number; y: number; vx: number; vy: number; life: 
 export interface Popup { x: number; y: number; text: string; life: number }
 export interface Scare { kind: ScareKind; t: number }
 
+export type PowerKind = 'shield' | 'freeze' | 'magnet' | 'doubleJump';
+export interface PowerUp { x: number; y: number; kind: PowerKind; taken: boolean }
+
+/** Active power-up effects. Timers are seconds left; the shield lasts until it absorbs a hit. */
+export interface Effects {
+  shield: boolean;
+  freeze: number;
+  magnet: number;
+  doubleJump: number;
+  /** Whether the double jump's extra air jump has been used since last touching the ground. */
+  airJumpUsed: boolean;
+}
+
+/** Normal play counts for the leaderboard; practice (started from the era map) does not. */
+export type GameMode = 'campaign' | 'practice';
+
 export interface GameState {
   phase: Phase;
   eraIndex: number;
@@ -70,6 +86,16 @@ export interface GameState {
   pickups: Pickup[];
   particles: Particle[];
   popups: Popup[];
+  mode: GameMode;
+  powerups: PowerUp[];
+  effects: Effects;
+  /** Drives hazard motion; it stops while a time freeze is active. */
+  hazardClock: number;
+  /** Pickups collected and hits taken in the current era, for its star rating. */
+  eraPickups: number;
+  eraHits: number;
+  /** Stars earned for the era just cleared (1 to 3), shown on the era-clear screen. */
+  lastStars: number;
 }
 
 export interface MoveInput { left: boolean; right: boolean }
@@ -92,6 +118,18 @@ const INVULNERABLE_TIME = 1.25;
 const COYOTE_TIME = 0.1;
 const JUMP_BUFFER_TIME = 0.14;
 const FINISH_MARGIN = 28;
+export const POWER_UP_SIZE = 28;
+export const FREEZE_TIME = 4;
+export const MAGNET_TIME = 8;
+export const DOUBLE_JUMP_TIME = 10;
+const MAGNET_RANGE = 170;
+const MAGNET_SPEED = 420;
+const POWER_KINDS: readonly PowerKind[] = ['shield', 'freeze', 'magnet', 'doubleJump'];
+export const POWER_LABELS: Record<PowerKind, string> = { shield: 'SHIELD!', freeze: 'TIME FREEZE!', magnet: 'MAGNET!', doubleJump: 'DOUBLE JUMP!' };
+/** Pickups needed (out of 25) for the collecting star. */
+export const STAR_PICKUPS = 20;
+/** Power-up boxes float above these ledges (indexes into LEDGES), clear of the pickups there. */
+const POWER_UP_LEDGES: readonly (readonly [ledge: number, offset: number])[] = [[2, 30], [7, 50]];
 
 export function createPlayer(): Player {
   return { x: START_X, y: FLOOR - 48, w: 32, h: 44, vx: 0, vy: 0, grounded: true, invulnerable: 0, facing: 1, coyote: 0, jumpBuffer: 0 };
@@ -138,6 +176,15 @@ export function buildLevel(state: GameState, eraIndex: number): void {
   }
   state.particles = [];
   state.popups = [];
+  // Two power-ups per era, rotating through the kinds so every era mixes them differently.
+  state.powerups = POWER_UP_LEDGES.map(([ledge, offset], i) => {
+    const [x, y] = LEDGES[ledge];
+    return { x: x + offset, y: y - 34, kind: POWER_KINDS[(eraIndex + i * 2) % POWER_KINDS.length], taken: false };
+  });
+  state.effects = { shield: false, freeze: 0, magnet: 0, doubleJump: 0, airJumpUsed: false };
+  state.eraPickups = 0;
+  state.eraHits = 0;
+  state.lastStars = 0;
   state.player = createPlayer();
   state.cameraX = 0;
   state.checkpointX = START_X;
@@ -146,17 +193,20 @@ export function buildLevel(state: GameState, eraIndex: number): void {
 }
 
 export function createGame(): GameState {
-  const state = { phase: 'start', eraIndex: 0, score: 0, levelStartScore: 0, lives: START_LIVES, cameraX: 0, elapsed: 0, scaresEnabled: true } as GameState;
+  const state = { phase: 'start', eraIndex: 0, score: 0, levelStartScore: 0, lives: START_LIVES, cameraX: 0, elapsed: 0, hazardClock: 0, scaresEnabled: true, mode: 'campaign' } as GameState;
   buildLevel(state, 0);
   return state;
 }
 
-export function beginGame(state: GameState): void {
+/** Starts a fresh game: normally from the first era, or from any era as practice. */
+export function beginGame(state: GameState, eraIndex = 0, mode: GameMode = 'campaign'): void {
+  state.mode = mode;
   state.score = 0;
   state.levelStartScore = 0;
   state.lives = START_LIVES;
   state.elapsed = 0;
-  buildLevel(state, 0);
+  state.hazardClock = 0;
+  buildLevel(state, eraIndex);
   state.phase = 'playing';
 }
 
@@ -198,7 +248,17 @@ export function groundAt(state: GameState, x: number): Platform | undefined {
 function hurt(state: GameState, events: GameEvent[]): void {
   const { player } = state;
   if (player.invulnerable > 0) return;
+  if (state.effects.shield) {
+    // The shield takes the hit instead of a life, with a short grace period and the usual knockback.
+    state.effects.shield = false;
+    events.push('shieldBreak');
+    player.invulnerable = INVULNERABLE_TIME;
+    player.vy = -360;
+    player.vx = -player.facing * 210;
+    return;
+  }
   state.lives--;
+  state.eraHits++;
   events.push('hit');
   player.invulnerable = INVULNERABLE_TIME;
   player.vy = -360;
@@ -227,7 +287,7 @@ function respawn(state: GameState): void {
 
 function updateHazard(state: GameState, hazard: Hazard, dt: number): void {
   const tempo = ERAS[state.eraIndex].tempo;
-  const t = state.elapsed * tempo;
+  const t = state.hazardClock * tempo;
   const { player } = state;
   switch (hazard.kind) {
     case 'roller':
@@ -284,7 +344,12 @@ export function step(state: GameState, input: MoveInput, dt: number, random: () 
   }
   state.elapsed += dt;
   const era = ERAS[state.eraIndex];
-  const { player } = state;
+  const { player, effects } = state;
+  const frozen = effects.freeze > 0;
+  if (!frozen) state.hazardClock += dt;
+  effects.freeze = Math.max(0, effects.freeze - dt);
+  effects.magnet = Math.max(0, effects.magnet - dt);
+  effects.doubleJump = Math.max(0, effects.doubleJump - dt);
   const previousBottom = player.y + player.h;
   player.invulnerable = Math.max(0, player.invulnerable - dt);
   player.jumpBuffer = Math.max(0, player.jumpBuffer - dt);
@@ -321,7 +386,14 @@ export function step(state: GameState, input: MoveInput, dt: number, random: () 
     }
   }
   if (!player.grounded) player.coyote = Math.max(0, player.coyote - dt);
-  if (player.jumpBuffer > 0 && (player.grounded || player.coyote > 0)) {
+  if (player.grounded) effects.airJumpUsed = false;
+  if (player.jumpBuffer > 0 && !player.grounded && player.coyote <= 0 && effects.doubleJump > 0 && !effects.airJumpUsed) {
+    // Double jump: one extra, slightly weaker jump in mid-air.
+    player.vy = -era.jump * 0.92;
+    player.jumpBuffer = 0;
+    effects.airJumpUsed = true;
+    events.push('jump');
+  } else if (player.jumpBuffer > 0 && (player.grounded || player.coyote > 0)) {
     player.vy = -era.jump;
     player.grounded = false;
     player.coyote = 0;
@@ -335,8 +407,34 @@ export function step(state: GameState, input: MoveInput, dt: number, random: () 
   }
 
   for (const hazard of state.hazards) {
-    updateHazard(state, hazard, dt);
+    if (!frozen) updateHazard(state, hazard, dt);
     if (hazard.active && overlaps(player, { x: hazard.x + 4, y: hazard.y + 3, w: hazard.w - 8, h: hazard.h - 5 })) hurt(state, events);
+  }
+
+  for (const powerup of state.powerups) {
+    const half = POWER_UP_SIZE / 2;
+    if (powerup.taken || !overlaps(player, { x: powerup.x - half, y: powerup.y - half, w: POWER_UP_SIZE, h: POWER_UP_SIZE })) continue;
+    powerup.taken = true;
+    if (powerup.kind === 'shield') effects.shield = true;
+    if (powerup.kind === 'freeze') effects.freeze = FREEZE_TIME;
+    if (powerup.kind === 'magnet') effects.magnet = MAGNET_TIME;
+    if (powerup.kind === 'doubleJump') effects.doubleJump = DOUBLE_JUMP_TIME;
+    events.push('powerup');
+    state.popups.push({ x: player.x + player.w / 2, y: player.y - 12, text: POWER_LABELS[powerup.kind], life: POPUP_LIFE });
+  }
+
+  if (effects.magnet > 0) {
+    const cx = player.x + player.w / 2;
+    const cy = player.y + player.h / 2;
+    for (const pickup of state.pickups) {
+      const dx = cx - pickup.x;
+      const dy = cy - pickup.y;
+      const distance = Math.hypot(dx, dy);
+      if (pickup.taken || distance > MAGNET_RANGE || distance < 1) continue;
+      const pull = Math.min(distance, MAGNET_SPEED * dt);
+      pickup.x += (dx / distance) * pull;
+      pickup.y += (dy / distance) * pull;
+    }
   }
 
   for (const pickup of state.pickups) {
@@ -344,6 +442,7 @@ export function step(state: GameState, input: MoveInput, dt: number, random: () 
       pickup.taken = true;
       const before = state.score;
       state.score += PICKUP_POINTS;
+      state.eraPickups++;
       events.push('collect');
       if (Math.floor(state.score / EXTRA_LIFE_POINTS) > Math.floor(before / EXTRA_LIFE_POINTS) && state.lives < MAX_LIVES) {
         state.lives++;
@@ -378,6 +477,7 @@ export function step(state: GameState, input: MoveInput, dt: number, random: () 
   // The prototype could overwrite a same-frame game over with an era clear; losing the last life wins.
   if (player.x + player.w >= WORLD_END - FINISH_MARGIN) {
     state.phase = 'clear';
+    state.lastStars = starsFor(state.eraPickups, state.eraHits);
     events.push('clear');
     return events;
   }
@@ -392,6 +492,11 @@ export function step(state: GameState, input: MoveInput, dt: number, random: () 
     }
   }
   return events;
+}
+
+/** 1 star for clearing the era, +1 for collecting at least STAR_PICKUPS pickups, +1 for taking no damage. */
+export function starsFor(pickups: number, hits: number): number {
+  return 1 + (pickups >= STAR_PICKUPS ? 1 : 0) + (hits === 0 ? 1 : 0);
 }
 
 /** Clamps a requestAnimationFrame delta exactly as the prototype did. */
