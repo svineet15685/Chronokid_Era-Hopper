@@ -23,7 +23,7 @@
     "db:migrate": "npm run db:migrate --workspace=@chronokid/api"
   },
   "devDependencies": {
-    "concurrently": "^9.1.2",
+    "concurrently": "^10.0.5",
     "drizzle-kit": "^0.31.11",
     "oxlint": "^1.87.0"
   }
