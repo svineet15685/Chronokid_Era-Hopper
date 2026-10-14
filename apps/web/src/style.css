@@ -139,7 +139,13 @@ button:active { transform: translateY(2px); box-shadow: 0 2px 0 #819b47; }
 .difficulty input:checked + span { border-color: var(--lime); color: var(--ink); background: var(--lime); }
 .difficulty input:focus-visible + span { outline: 3px solid var(--paper); outline-offset: 2px; }
 .difficulty-hint { flex-basis: 100%; margin: 2px 0 0; color: #f6efd9b8; font-size: 12px; }
-.link-button { display: block; min-height: 32px; margin-top: 12px; padding: 0; border: 0; color: #f6efd9b8; background: none; box-shadow: none; font-size: 11px; text-decoration: underline; text-transform: none; letter-spacing: 0; }
+.menu-links { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 12px; }
+.menu-links[hidden] { display: none; }
+.intro-panel { width: min(560px, 92%); }
+.intro-art { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; margin-bottom: 14px; border: 3px solid #f6efd9; border-radius: 6px; image-rendering: auto; }
+.intro-caption { min-height: 2.6em; margin: 0 0 6px; font-size: clamp(18px, 3vw, 24px); font-weight: 900; line-height: 1.25; }
+.intro-dots { margin: 0 0 14px; color: #f6efd966; letter-spacing: 6px; }
+.link-button { display: block; min-height: 32px; padding: 0; border: 0; color: #f6efd9b8; background: none; box-shadow: none; font-size: 11px; text-decoration: underline; text-transform: none; letter-spacing: 0; }
 .link-button[hidden] { display: none; }
 .link-button:hover { transform: none; color: var(--paper); }
 .gate-choices { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 10px; }
@@ -225,6 +231,8 @@ button:active { transform: translateY(2px); box-shadow: 0 2px 0 #819b47; }
   .look-card canvas { width: 42px; height: 57px; }
   .era-card { min-height: 36px; padding: 4px 8px; }
   .star-row { font-size: 22px; }
+  .intro-art { max-height: 46vh; width: auto; margin-inline: auto; }
+  .intro-caption { font-size: 16px; min-height: 0; }
   .difficulty { margin: 0 0 10px; }
   .difficulty span { padding: 5px 10px; }
   .board-row { padding: 4px; }

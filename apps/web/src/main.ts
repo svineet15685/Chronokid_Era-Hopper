@@ -11,6 +11,7 @@ import { OnlineSession } from './online/session';
 import { ProgressTracker, totalStars } from './progress';
 import { OUTFITS, drawHero, newlyUnlocked, outfitUnlocked, type OutfitId } from './game/hero';
 import { celebrate } from './ui/celebrate';
+import { INTRO_CAPTIONS, drawIntroPanel, introSeen, markIntroSeen } from './ui/intro';
 import { loadDifficulty, loadOutfit, loadScareStyle, makeGateQuestion, saveDifficulty, saveOutfit, saveScareStyle, type ScareStyle } from './settings';
 import { renderFinishResult, renderJoinPrompt, renderLeaderboard, renderNote } from './ui/online-panel';
 
@@ -62,6 +63,14 @@ const mapOverlay = byId('map');
 const eraGrid = byId('era-grid');
 const mapClose = byId<HTMLButtonElement>('map-close');
 const grownupsButton = byId<HTMLButtonElement>('grownups-open');
+const menuLinks = grownupsButton.parentElement as HTMLElement;
+const storyButton = byId<HTMLButtonElement>('story-open');
+const introOverlay = byId('intro');
+const introArt = byId<HTMLCanvasElement>('intro-art');
+const introCaption = byId('intro-caption');
+const introDots = byId('intro-dots');
+const introNext = byId<HTMLButtonElement>('intro-next');
+const introSkip = byId<HTMLButtonElement>('intro-skip');
 const looksButton = byId<HTMLButtonElement>('looks-open');
 const difficultyEl = byId('difficulty');
 const difficultyHint = byId('difficulty-hint');
@@ -132,7 +141,7 @@ function showOverlay(): void {
   erasButton.hidden = state.phase === 'clear';
   looksButton.hidden = state.phase === 'clear';
   difficultyEl.hidden = state.phase !== 'start';
-  grownupsButton.hidden = state.phase !== 'start';
+  menuLinks.hidden = state.phase !== 'start';
   starsEl.hidden = state.phase !== 'clear';
   overlay.classList.remove('hidden');
   actionButton.hidden = false;
@@ -379,6 +388,48 @@ function closeLooks(): void {
   looksButton.focus({ preventScroll: true });
 }
 
+/** Intro story: four panels, Next/Skip, animated unless the player prefers reduced motion. */
+let introPage = 0;
+let introFrame = 0;
+const introCtx = introArt.getContext('2d');
+
+function renderIntroPage(): void {
+  introCaption.textContent = INTRO_CAPTIONS[introPage];
+  introDots.textContent = INTRO_CAPTIONS.map((_, i) => (i === introPage ? '●' : '○')).join('');
+  introNext.textContent = introPage === INTRO_CAPTIONS.length - 1 ? "Let's go!" : 'Next';
+}
+
+function animateIntro(time: number): void {
+  if (introOverlay.classList.contains('hidden') || !introCtx) return;
+  drawIntroPanel(introCtx, introPage, time / 1000, reducedMotion());
+  introFrame = requestAnimationFrame(animateIntro);
+}
+
+function openIntro(): void {
+  introPage = 0;
+  renderIntroPage();
+  introOverlay.classList.remove('hidden');
+  cancelAnimationFrame(introFrame);
+  introFrame = requestAnimationFrame(animateIntro);
+  introNext.focus({ preventScroll: true });
+}
+
+function closeIntro(): void {
+  markIntroSeen();
+  introOverlay.classList.add('hidden');
+  cancelAnimationFrame(introFrame);
+  actionButton.focus({ preventScroll: true });
+}
+
+function nextIntroPage(): void {
+  if (introPage === INTRO_CAPTIONS.length - 1) closeIntro();
+  else {
+    introPage++;
+    renderIntroPage();
+    introNext.focus({ preventScroll: true });
+  }
+}
+
 function closeBoard(): void {
   boardView++;
   boardOverlay.classList.add('hidden');
@@ -394,6 +445,9 @@ function renderToggle(button: HTMLButtonElement, on: boolean, label: string, onT
 actionButton.addEventListener('click', () => actionHandler());
 leaderboardButton.addEventListener('click', () => void openBoard());
 erasButton.addEventListener('click', openMap);
+storyButton.addEventListener('click', openIntro);
+introNext.addEventListener('click', nextIntroPage);
+introSkip.addEventListener('click', closeIntro);
 looksButton.addEventListener('click', openLooks);
 looksClose.addEventListener('click', closeLooks);
 mapClose.addEventListener('click', () => closeMap());
@@ -403,6 +457,10 @@ window.addEventListener('keydown', event => {
   if (event.key === 'Escape' && !mapOverlay.classList.contains('hidden')) closeMap();
   if (event.key === 'Escape' && !grownupsOverlay.classList.contains('hidden')) closeGrownups();
   if (event.key === 'Escape' && !looksOverlay.classList.contains('hidden')) closeLooks();
+  if (!introOverlay.classList.contains('hidden')) {
+    if (event.key === 'Escape') closeIntro();
+    if (event.key === 'ArrowRight') nextIntroPage();
+  }
 });
 restartButton.addEventListener('click', start);
 
@@ -525,7 +583,7 @@ scareSettings.addEventListener('change', event => {
 const keys = bindInput(document, {
   onJump: () => requestJump(state),
   onEnter: () => {
-    const menuOpen = [boardOverlay, mapOverlay, grownupsOverlay, looksOverlay].some(menu => !menu.classList.contains('hidden'));
+    const menuOpen = [boardOverlay, mapOverlay, grownupsOverlay, looksOverlay, introOverlay].some(menu => !menu.classList.contains('hidden'));
     if (state.phase === 'start' && !menuOpen) start();
   }
 });
@@ -590,3 +648,5 @@ if (import.meta.env.DEV) (window as Window & { __chronokid?: { state: GameState 
 updateHud();
 showOverlay();
 requestAnimationFrame(frame);
+// First visit: tell the story before the first game.
+if (!introSeen()) openIntro();
