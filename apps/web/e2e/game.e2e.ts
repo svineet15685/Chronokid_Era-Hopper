@@ -20,10 +20,12 @@ async function holdUntilMoved(page: Page, press: () => Promise<void>, release: (
   }
 }
 
-/** Puts the player just short of the finish flag so the next frames clear the era. */
+/** Puts the player just short of the finish flag (counting any era boss as beaten) so the next frames clear the era. */
 async function warpToFinish(page: Page): Promise<void> {
   await page.evaluate(end => {
-    const { player } = window.__chronokid.state;
+    const { state } = window.__chronokid;
+    const { player } = state;
+    if (state.boss) state.boss.hp = 0;
     player.x = end - 40;
     player.invulnerable = 5;
   }, WORLD_END);

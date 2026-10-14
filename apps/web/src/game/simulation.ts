@@ -2,10 +2,11 @@
 // The first era keeps the original prototype's numbers and ordering.
 import { CHECKPOINT_X, DIFFICULTIES, ERAS, EXTRA_LIFE_POINTS, FLOOR, H, LAST_ERA, LEDGES, PICKUP_POINTS, SKINS, START_LIVES, START_X, W, WORLD_END, type Difficulty, type HazardKind, type ScareKind, type SkinName } from './config';
 import { GAME_RULES } from '@chronokid/shared';
+import { bossBeaten, createBoss, updateBoss, type Boss, type BossEvent } from './boss';
 import { levelLayout, type HazardSlot } from './level';
 
 export type Phase = 'start' | 'playing' | 'clear' | 'victory' | 'gameover';
-export type GameEvent = 'jump' | 'collect' | 'combo' | 'extraLife' | 'hit' | 'clear' | 'gameover' | 'checkpoint' | 'scare' | 'powerup' | 'shieldBreak';
+export type GameEvent = 'jump' | 'collect' | 'combo' | 'extraLife' | 'hit' | 'clear' | 'gameover' | 'checkpoint' | 'scare' | 'powerup' | 'shieldBreak' | BossEvent;
 
 export interface Box { x: number; y: number; w: number; h: number }
 
@@ -100,6 +101,8 @@ export interface GameState {
   lastStars: number;
   /** Pickups grabbed in quick succession. Cosmetic only: combos never change the score. */
   combo: { count: number; timer: number };
+  /** The era's boss, if it has one; the finish stays locked until it is beaten. */
+  boss: Boss | null;
 }
 
 export interface MoveInput { left: boolean; right: boolean }
@@ -191,6 +194,7 @@ export function buildLevel(state: GameState, eraIndex: number): void {
   state.eraHits = 0;
   state.lastStars = 0;
   state.combo = { count: 0, timer: 0 };
+  state.boss = era.boss ? createBoss(era.boss) : null;
   state.player = createPlayer();
   state.cameraX = 0;
   state.checkpointX = START_X;
@@ -371,6 +375,8 @@ export function step(state: GameState, input: MoveInput, dt: number, random: () 
   else player.vx *= Math.pow(0.0008, dt);
   player.x += player.vx * dt;
   player.x = Math.max(0, Math.min(WORLD_END - player.w, player.x));
+  // An unbeaten boss blocks the way to the finish flag.
+  if (state.boss && !bossBeaten(state.boss)) player.x = Math.min(player.x, state.boss.x + 10 - player.w);
   player.vy += era.gravity * dt;
   player.y += player.vy * dt;
 
@@ -417,6 +423,20 @@ export function step(state: GameState, input: MoveInput, dt: number, random: () 
   for (const hazard of state.hazards) {
     if (!frozen) updateHazard(state, hazard, dt);
     if (hazard.active && overlaps(player, { x: hazard.x + 4, y: hazard.y + 3, w: hazard.w - 8, h: hazard.h - 5 })) hurt(state, events);
+  }
+
+  if (state.boss) {
+    const fight = updateBoss(state.boss, player, frozen ? 0 : dt, ERAS[state.eraIndex].tempo * DIFFICULTIES[state.difficulty].tempo);
+    events.push(...fight.events);
+    if (fight.events.includes('bossHit')) state.popups.push({ x: player.x + player.w / 2, y: player.y - 16, text: 'BONK!', life: POPUP_LIFE });
+    if (fight.bounce) {
+      player.vy = -520;
+      player.grounded = false;
+    }
+    if (fight.hurtPlayer) {
+      hurt(state, events);
+      player.vx = -260;
+    }
   }
 
   for (const powerup of state.powerups) {
@@ -482,6 +502,8 @@ export function step(state: GameState, input: MoveInput, dt: number, random: () 
   }
   state.popups = state.popups.filter(p => p.life > 0);
   state.cameraX = Math.max(0, Math.min(WORLD_END - W, player.x - W * 0.32));
+  // During a boss fight the camera holds the whole arena in view.
+  if (state.boss && state.boss.phase !== 'waiting' && state.boss.phase !== 'leaving') state.cameraX = WORLD_END - W;
 
   if (state.phase !== 'playing') return events;
   if (state.checkpointX < CHECKPOINT_X && player.x >= CHECKPOINT_X) {

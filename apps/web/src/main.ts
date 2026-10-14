@@ -619,7 +619,8 @@ function frame(timestamp: number): void {
   for (const event of step(state, keys, dt)) {
     // Pickups in a combo climb in pitch instead of repeating the plain collect sound.
     if (event === 'collect') { if (state.combo.count >= 2) sound.combo(state.combo.count); else sound.play('collect'); }
-    if (event === 'jump' || event === 'extraLife' || event === 'hit' || event === 'checkpoint' || event === 'powerup' || event === 'shieldBreak') sound.play(event);
+    if (event === 'jump' || event === 'extraLife' || event === 'hit' || event === 'checkpoint' || event === 'powerup' || event === 'shieldBreak' || event === 'bossRoar' || event === 'bossStomp' || event === 'bossHit') sound.play(event);
+    if (event === 'bossDefeated') sound.play('fanfare');
     if (event === 'extraLife') pulseHearts();
     if (event === 'scare' && state.scare) sound.scare(state.scare.kind, spooky());
     if (event === 'collect' || event === 'hit') updateHud();

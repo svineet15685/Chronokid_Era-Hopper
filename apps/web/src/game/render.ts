@@ -1,6 +1,8 @@
 // Canvas drawing. Stone, Medieval, and Future art is ported unchanged from the prototype.
 // Jump scare creatures are drawn full screen by scares.ts; the game view only shakes.
 import { CHECKPOINT_X, ERAS, FLOOR, H, W, WORLD_END, type Era } from './config';
+import { drawBossAttacks, drawBossCreature } from './boss-art';
+import { BOSS_DEFS, BOSS_TIMES } from './boss';
 import { drawHero, type OutfitId } from './hero';
 import { DOUBLE_JUMP_TIME, FREEZE_TIME, MAGNET_TIME, PARTICLE_LIFE, POPUP_LIFE, POWER_UP_SIZE, type GameState, type Hazard, type Platform, type PowerKind } from './simulation';
 
@@ -549,6 +551,48 @@ export function createRenderer(ctx: CanvasRenderingContext2D, options: RenderOpt
     drawFlag(CHECKPOINT_X + 60 - state.cameraX, reached ? era.accent : '#8a9095', reached ? 94 : 40);
   }
 
+  /** The era's boss and its attacks, with warning shadows for falling objects. */
+  function drawBoss(state: GameState, time: number): void {
+    const boss = state.boss;
+    if (!boss) return;
+    const { cameraX } = state;
+    const reduced = options.reducedMotion?.() ?? false;
+    if (boss.phase === 'telegraph' && boss.attack === 'rain') {
+      const progress = 1 - boss.timer / BOSS_TIMES.telegraph;
+      ctx.globalAlpha = 0.25 + progress * 0.45;
+      for (const target of boss.rockTargets) {
+        ctx.fillStyle = '#1a140c'; ctx.beginPath(); ctx.ellipse(target - cameraX, FLOOR + 2, 12 + progress * 14, 5, 0, 0, TAU); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+    drawBossAttacks(ctx, boss.kind, boss.shockwaves, boss.rocks, boss.shots, cameraX, time);
+    const x = boss.x - cameraX;
+    if (x > W + 60) return;
+    drawBossCreature(ctx, boss.kind, x, {
+      tired: boss.phase === 'tired',
+      roaring: boss.phase === 'intro' || boss.phase === 'telegraph',
+      rear: boss.phase === 'telegraph' && boss.attack === 'stomp' ? (1 - boss.timer / BOSS_TIMES.telegraph) * 22 : 0,
+      flash: boss.phase === 'hurt' && !reduced && Math.floor(time * 16) % 2 === 0,
+      bob: boss.phase === 'leaving' && !reduced ? Math.abs(Math.sin(time * 14)) * 6 : 0,
+      time: reduced ? 0 : time
+    }, reduced);
+  }
+
+  /** Boss name and remaining hits, top center while the fight is on. */
+  function drawBossBar(state: GameState): void {
+    const boss = state.boss;
+    if (!boss || boss.phase === 'waiting' || boss.phase === 'leaving') return;
+    const { name, hp } = BOSS_DEFS[boss.kind];
+    const width = 150 + hp * 34;
+    const x = (W - width) / 2;
+    ctx.fillStyle = '#10201fd9'; ctx.beginPath(); ctx.roundRect(x, 70, width, 34, 6); ctx.fill();
+    ctx.font = '900 14px "Trebuchet MS", sans-serif'; ctx.textAlign = 'left'; ctx.fillStyle = '#f6efd9';
+    ctx.fillText(name, x + 12, 92);
+    for (let i = 0; i < hp; i++) {
+      rect(x + 140 + i * 34, 80, 28, 14, i < boss.hp ? '#ff6f7d' : '#ffffff33');
+    }
+  }
+
   /**
    * Spooky atmosphere, drawn over the world but under the HUD: darkness with a soft glow around the hero,
    * drifting fog, and pairs of eyes that blink in the dark. Cartoon-creepy, nothing gory.
@@ -605,6 +649,7 @@ export function createRenderer(ctx: CanvasRenderingContext2D, options: RenderOpt
     drawHazards(state);
     drawFreezeTint(state);
     drawPowerUps(state);
+    drawBoss(state, time);
     for (const p of state.particles) { ctx.globalAlpha = Math.max(0, p.life / PARTICLE_LIFE); rect(p.x - state.cameraX, p.y, 4, 4, p.color); }
     ctx.globalAlpha = 1;
     drawPlayer(state, time);
@@ -620,6 +665,7 @@ export function createRenderer(ctx: CanvasRenderingContext2D, options: RenderOpt
     }
     ctx.globalAlpha = 1;
     if (state.phase === 'playing') drawEffectBadges(state);
+    if (state.phase === 'playing') drawBossBar(state);
     if (state.phase === 'playing') {
       const progress = Math.min(1, state.player.x / WORLD_END);
       rect(0, H - 4, W * progress, 4, era.accent);

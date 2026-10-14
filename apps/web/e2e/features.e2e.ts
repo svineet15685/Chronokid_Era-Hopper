@@ -8,6 +8,7 @@ async function clearEra(page: Page, pickups: number, hits: number): Promise<void
     state.eraPickups = p;
     state.eraHits = h;
     state.player.invulnerable = 5;
+    /* the era boss blocks the flag; count it beaten */ if (state.boss) state.boss.hp = 0;
     state.player.x = 3400;
   }, [pickups, hits]);
   await expect(page.locator('#eyebrow')).toContainText('COMPLETE');

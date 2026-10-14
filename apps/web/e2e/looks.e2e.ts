@@ -39,6 +39,7 @@ test('clearing an era announces a newly unlocked look', async ({ page }, testInf
     state.eraPickups = 25;
     state.eraHits = 0;
     state.player.invulnerable = 5;
+    /* the era boss blocks the flag; count it beaten */ if (state.boss) state.boss.hp = 0;
     state.player.x = 3400;
   });
   await expect(page.locator('#star-hint')).toContainText('New look unlocked: Viking Horns! Try it in 👕 Looks.');
