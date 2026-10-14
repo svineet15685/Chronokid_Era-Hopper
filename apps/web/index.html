@@ -31,6 +31,25 @@
             <button class="secondary" id="eras-open" type="button">🗺️ Eras</button>
             <button class="secondary" id="leaderboard-open" type="button">🏆 Leaderboard</button>
           </div>
+          <button class="link-button" id="grownups-open" type="button">⚙ Grown-ups</button>
+        </div>
+      </section>
+      <section class="overlay board-overlay hidden" id="grownups" role="dialog" aria-modal="true" aria-labelledby="grownups-title">
+        <div class="panel">
+          <div class="eyebrow">Settings</div>
+          <h1 id="grownups-title">Grown-ups<br /><em>only</em></h1>
+          <div id="gate">
+            <p class="subtitle" id="gate-question"></p>
+            <div class="gate-choices" id="gate-choices"></div>
+            <p class="online-note" id="gate-note" aria-live="polite"></p>
+          </div>
+          <fieldset class="scare-settings" id="scare-settings" hidden>
+            <legend>Jump scares</legend>
+            <label><input type="radio" name="scare-style" value="off" /> <strong>Off</strong> <span>No scares at all. The 👻 button is locked.</span></label>
+            <label><input type="radio" name="scare-style" value="silly" /> <strong>Silly</strong> <span>Cartoon surprises with a flash and a funny sound.</span></label>
+            <label><input type="radio" name="scare-style" value="spooky" /> <strong>Spooky</strong> <span>Darker levels, fog, glowing eyes, a heartbeat, and bigger scares. Cartoon style, no gore. About 7 and up.</span></label>
+          </fieldset>
+          <button id="grownups-close" type="button">Done</button>
         </div>
       </section>
       <section class="overlay board-overlay hidden" id="map" role="dialog" aria-modal="true" aria-labelledby="map-title">

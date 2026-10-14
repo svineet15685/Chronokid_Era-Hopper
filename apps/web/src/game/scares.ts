@@ -187,7 +187,10 @@ export function drawScare(ctx: CanvasRenderingContext2D, kind: ScareKind, t: num
 }
 
 /** Draws scares on a viewport-sized canvas layered over the whole page; hidden when no scare is playing. */
-export function createScareLayer(canvas: HTMLCanvasElement, options: { reducedMotion?: () => boolean } = {}): (scare: Scare | null) => void {
+/** Spooky scares start with a short blackout, then the creature appears on a darker, red-edged backdrop. */
+const BLACKOUT = 0.3;
+
+export function createScareLayer(canvas: HTMLCanvasElement, options: { reducedMotion?: () => boolean; spooky?: () => boolean } = {}): (scare: Scare | null) => void {
   const ctx = canvas.getContext('2d');
   return scare => {
     if (!scare || !ctx) {
@@ -209,6 +212,32 @@ export function createScareLayer(canvas: HTMLCanvasElement, options: { reducedMo
     ctx.fillRect(0, 0, width, height);
     ctx.globalAlpha = 1;
     const reduced = options.reducedMotion?.() ?? false;
+    if (options.spooky?.()) {
+      if (scare.t < BLACKOUT) {
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, width, height);
+        return;
+      }
+      ctx.globalAlpha = 0.85 * Math.min(1, (SCARE_TIME - scare.t) / 0.25);
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, width, height);
+      ctx.globalAlpha = 1;
+      drawScare(ctx, scare.kind, scare.t - BLACKOUT, SCARE_TIME - BLACKOUT, width, height, reduced);
+      const edge = ctx.createRadialGradient(width / 2, height / 2, Math.min(width, height) * 0.3, width / 2, height / 2, Math.max(width, height) * 0.7);
+      edge.addColorStop(0, 'rgba(120, 0, 0, 0)');
+      edge.addColorStop(1, 'rgba(120, 0, 0, 0.55)');
+      ctx.fillStyle = edge;
+      ctx.fillRect(0, 0, width, height);
+      const redFlash = reduced ? 0 : Math.max(0, 0.45 - (scare.t - BLACKOUT) * 4);
+      if (redFlash > 0) {
+        ctx.globalAlpha = redFlash;
+        ctx.fillStyle = '#b00000';
+        ctx.fillRect(0, 0, width, height);
+        ctx.globalAlpha = 1;
+      }
+      return;
+    }
     drawScare(ctx, scare.kind, scare.t, SCARE_TIME, width, height, reduced);
     // No white flash for players who prefer reduced motion.
     const flash = reduced ? 0 : Math.max(0, 0.7 - scare.t * 5);

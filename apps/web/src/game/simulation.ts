@@ -5,7 +5,7 @@ import { GAME_RULES } from '@chronokid/shared';
 import { levelLayout, type HazardSlot } from './level';
 
 export type Phase = 'start' | 'playing' | 'clear' | 'victory' | 'gameover';
-export type GameEvent = 'jump' | 'collect' | 'extraLife' | 'hit' | 'clear' | 'gameover' | 'checkpoint' | 'scare' | 'powerup' | 'shieldBreak';
+export type GameEvent = 'jump' | 'collect' | 'combo' | 'extraLife' | 'hit' | 'clear' | 'gameover' | 'checkpoint' | 'scare' | 'powerup' | 'shieldBreak';
 
 export interface Box { x: number; y: number; w: number; h: number }
 
@@ -96,6 +96,8 @@ export interface GameState {
   eraHits: number;
   /** Stars earned for the era just cleared (1 to 3), shown on the era-clear screen. */
   lastStars: number;
+  /** Pickups grabbed in quick succession. Cosmetic only: combos never change the score. */
+  combo: { count: number; timer: number };
 }
 
 export interface MoveInput { left: boolean; right: boolean }
@@ -128,6 +130,8 @@ const POWER_KINDS: readonly PowerKind[] = ['shield', 'freeze', 'magnet', 'double
 export const POWER_LABELS: Record<PowerKind, string> = { shield: 'SHIELD!', freeze: 'TIME FREEZE!', magnet: 'MAGNET!', doubleJump: 'DOUBLE JUMP!' };
 /** Pickups needed (out of 25) for the collecting star. */
 export const STAR_PICKUPS = 20;
+/** Seconds allowed between pickups to keep a combo going. */
+export const COMBO_WINDOW = 1.2;
 /** Power-up boxes float above these ledges (indexes into LEDGES), clear of the pickups there. */
 const POWER_UP_LEDGES: readonly (readonly [ledge: number, offset: number])[] = [[2, 30], [7, 50]];
 
@@ -185,6 +189,7 @@ export function buildLevel(state: GameState, eraIndex: number): void {
   state.eraPickups = 0;
   state.eraHits = 0;
   state.lastStars = 0;
+  state.combo = { count: 0, timer: 0 };
   state.player = createPlayer();
   state.cameraX = 0;
   state.checkpointX = START_X;
@@ -350,6 +355,8 @@ export function step(state: GameState, input: MoveInput, dt: number, random: () 
   effects.freeze = Math.max(0, effects.freeze - dt);
   effects.magnet = Math.max(0, effects.magnet - dt);
   effects.doubleJump = Math.max(0, effects.doubleJump - dt);
+  state.combo.timer = Math.max(0, state.combo.timer - dt);
+  if (state.combo.timer === 0) state.combo.count = 0;
   const previousBottom = player.y + player.h;
   player.invulnerable = Math.max(0, player.invulnerable - dt);
   player.jumpBuffer = Math.max(0, player.jumpBuffer - dt);
@@ -444,6 +451,12 @@ export function step(state: GameState, input: MoveInput, dt: number, random: () 
       state.score += PICKUP_POINTS;
       state.eraPickups++;
       events.push('collect');
+      state.combo.count = state.combo.timer > 0 ? state.combo.count + 1 : 1;
+      state.combo.timer = COMBO_WINDOW;
+      if (state.combo.count >= 2) {
+        events.push('combo');
+        state.popups.push({ x: pickup.x, y: pickup.y - 18, text: `x${state.combo.count}${state.combo.count >= 5 ? '!' : ''}`, life: POPUP_LIFE * 0.7 });
+      }
       if (Math.floor(state.score / EXTRA_LIFE_POINTS) > Math.floor(before / EXTRA_LIFE_POINTS) && state.lives < MAX_LIVES) {
         state.lives++;
         events.push('extraLife');

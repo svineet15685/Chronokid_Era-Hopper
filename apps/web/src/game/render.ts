@@ -12,11 +12,13 @@ const DROPPER_WARN = 260;
 const wrap = (value: number, span: number, margin: number) => ((value % (W + span)) + W + span) % (W + span) - margin;
 
 export interface RenderOptions {
-  /** When true (the player prefers reduced motion), scares do not shake the screen. */
+  /** When true (the player prefers reduced motion), scares do not shake the screen and the hero does not dance. */
   reducedMotion?: () => boolean;
+  /** Spooky mode: darkness with a glow around the hero, fog, and eyes watching from the background. */
+  spooky?: () => boolean;
 }
 
-export function createRenderer(ctx: CanvasRenderingContext2D, options: RenderOptions = {}): (state: GameState) => void {
+export function createRenderer(ctx: CanvasRenderingContext2D, options: RenderOptions = {}): (state: GameState, time?: number) => void {
   function rect(x: number, y: number, w: number, h: number, color: string): void {
     ctx.fillStyle = color;
     ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
@@ -437,17 +439,24 @@ export function createRenderer(ctx: CanvasRenderingContext2D, options: RenderOpt
     }
   }
 
-  function drawPlayer(state: GameState): void {
+  /** `time` is wall-clock seconds, so the victory dance keeps going while the game itself is paused. */
+  function drawPlayer(state: GameState, time: number): void {
     const { player } = state;
     if (player.invulnerable > 0 && Math.floor(state.elapsed * 14) % 2 === 0) return;
-    const x = Math.round(player.x - state.cameraX); const y = Math.round(player.y);
+    // Victory dance on the era-clear and final screens: hop, turn, and wave.
+    const dancing = (state.phase === 'clear' || state.phase === 'victory') && !options.reducedMotion?.();
+    const facing = dancing ? (Math.floor(time / 0.3) % 2 ? -1 : 1) : player.facing;
+    const x = Math.round(player.x - state.cameraX);
+    const y = Math.round(player.y - (dancing ? Math.abs(Math.sin(time * 7)) * 12 : 0));
+    const armsUp = dancing && Math.floor(time / 0.15) % 2 === 0;
     ctx.save();
-    if (player.facing < 0) { ctx.translate(x + player.w, 0); ctx.scale(-1, 1); } else ctx.translate(x, 0);
+    if (facing < 0) { ctx.translate(x + player.w, 0); ctx.scale(-1, 1); } else ctx.translate(x, 0);
     // Tiny time-traveler silhouette, intentionally built from crisp canvas blocks.
     rect(7, y + 1, 20, 17, '#f2c36b');
     rect(11, y + 5, 3, 3, '#172d36'); rect(22, y + 5, 3, 3, '#172d36');
     rect(9, y + 18, 19, 16, '#2e9a91');
-    rect(3, y + 19, 8, 6, '#eaa959'); rect(27, y + 20, 7, 6, '#eaa959');
+    if (armsUp) { rect(3, y + 8, 6, 12, '#eaa959'); rect(28, y + 8, 6, 12, '#eaa959'); }
+    else { rect(3, y + 19, 8, 6, '#eaa959'); rect(27, y + 20, 7, 6, '#eaa959'); }
     rect(10, y + 33, 7, 10, '#e8b85e'); rect(21, y + 33, 7, 10, '#e8b85e');
     rect(8, y + 41, 10, 3, '#30404b'); rect(20, y + 41, 11, 3, '#30404b');
     rect(9, y - 2, 18, 4, '#415b64'); rect(13, y - 6, 11, 4, '#5fe2cb');
@@ -545,7 +554,48 @@ export function createRenderer(ctx: CanvasRenderingContext2D, options: RenderOpt
     drawFlag(CHECKPOINT_X + 60 - state.cameraX, reached ? era.accent : '#8a9095', reached ? 94 : 40);
   }
 
-  return function draw(state: GameState): void {
+  /**
+   * Spooky atmosphere, drawn over the world but under the HUD: darkness with a soft glow around the hero,
+   * drifting fog, and pairs of eyes that blink in the dark. Cartoon-creepy, nothing gory.
+   */
+  function drawSpooky(state: GameState, time: number): void {
+    const { player, cameraX } = state;
+    const px = player.x + player.w / 2 - cameraX;
+    const py = player.y + player.h / 2;
+    const reduced = options.reducedMotion?.() ?? false;
+    // Brief flickers, like a failing light (not for reduced motion).
+    const flicker = !reduced && Math.sin(time * 13) + Math.sin(time * 7.3) > 1.75 ? 0.15 : 0;
+    const dark = ctx.createRadialGradient(px, py, 70, px, py, 320);
+    dark.addColorStop(0, 'rgba(6, 4, 18, 0)');
+    dark.addColorStop(0.55, `rgba(6, 4, 18, ${0.45 + flicker})`);
+    dark.addColorStop(1, `rgba(6, 4, 18, ${0.82 + flicker})`);
+    ctx.fillStyle = dark;
+    ctx.fillRect(0, 0, W, H);
+
+    // Low fog: soft clouds that drift along the ground.
+    for (let i = 0; i < 6; i++) {
+      const drift = reduced ? 0 : time * (10 + (i % 3) * 5);
+      const fx = wrap(-cameraX * 0.6 + i * 190 + drift, 300, 150);
+      const fy = FLOOR - 10 - (i % 2) * 26;
+      const fog = ctx.createRadialGradient(fx, fy, 10, fx, fy, 150);
+      fog.addColorStop(0, 'rgba(205, 214, 255, 0.2)');
+      fog.addColorStop(1, 'rgba(205, 214, 255, 0)');
+      ctx.fillStyle = fog;
+      ctx.fillRect(fx - 150, fy - 150, 300, 300);
+    }
+
+    // Eyes in the dark; each pair blinks now and then.
+    for (let i = 0; i < 7; i++) {
+      if (Math.sin(time * 0.9 + i * 2.1) > 0.93) continue;
+      const ex = wrap(i * 173 - cameraX * 0.35, 120, 60);
+      const ey = 110 + (i % 4) * 55;
+      const color = i % 3 === 0 ? '#ffd23f' : '#ff3b3b';
+      ctx.globalAlpha = 0.35; circle(ex, ey, 9, color); circle(ex + 18, ey, 9, color);
+      ctx.globalAlpha = 1; circle(ex, ey, 3, color); circle(ex + 18, ey, 3, color);
+    }
+  }
+
+  return function draw(state: GameState, time = 0): void {
     const era = ERAS[state.eraIndex];
     const scare = state.scare;
     ctx.save();
@@ -562,8 +612,9 @@ export function createRenderer(ctx: CanvasRenderingContext2D, options: RenderOpt
     drawPowerUps(state);
     for (const p of state.particles) { ctx.globalAlpha = Math.max(0, p.life / PARTICLE_LIFE); rect(p.x - state.cameraX, p.y, 4, 4, p.color); }
     ctx.globalAlpha = 1;
-    drawPlayer(state);
+    drawPlayer(state, time);
     drawShieldBubble(state);
+    if (options.spooky?.()) drawSpooky(state, time);
     for (const popup of state.popups) {
       ctx.globalAlpha = Math.min(1, popup.life / (POPUP_LIFE * 0.5));
       ctx.font = '900 26px "Trebuchet MS", "Segoe UI", sans-serif';

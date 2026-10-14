@@ -42,6 +42,27 @@ test('clearing an era shows its stars and what would earn more', async ({ page }
   await expect(page.locator('#star-hint')).toHaveText('New best! Perfect era!');
 });
 
+test('a perfect era gets confetti; a 2-star era does not', async ({ page }, testInfo) => {
+  await startGame(page, isTouch(testInfo.project.name));
+  await clearEra(page, 20, 1);
+  await expect(page.locator('#star-row')).toHaveAttribute('aria-label', '2 of 3 stars');
+  await expect(page.locator('.confetti')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Advance to Next Era' }).click();
+  await clearEra(page, 25, 0);
+  await expect(page.locator('.confetti span')).toHaveCount(60);
+  // Decorative only: it must never block the buttons underneath.
+  await page.getByRole('button', { name: 'Advance to Next Era' }).click();
+  await expect(page.locator('#era')).toHaveText('3/10 VIKING AGE');
+});
+
+test('no confetti for players who prefer reduced motion', async ({ page }, testInfo) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await startGame(page, isTouch(testInfo.project.name));
+  await clearEra(page, 25, 0);
+  await expect(page.locator('#star-row')).toHaveAttribute('aria-label', '3 of 3 stars');
+  await expect(page.locator('.confetti')).toHaveCount(0);
+});
+
 test('the era map unlocks reached eras and starts practice runs', async ({ page }, testInfo) => {
   const touch = isTouch(testInfo.project.name);
   await page.locator('#eras-open').click();
