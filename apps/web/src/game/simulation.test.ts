@@ -1,11 +1,11 @@
 import { GAME_RULES } from '@chronokid/shared';
 import { describe, expect, it } from 'vitest';
-import { CHECKPOINT_X, DIFFICULTIES, ERAS, FLOOR, H, HAZARD_XS, SKINS, START_X, WORLD_END, type EraId } from './config';
+import { CHECKPOINT_X, DIFFICULTIES, ERAS, LEDGES, FLOOR, H, HAZARD_XS, SKINS, START_X, WORLD_END, type EraId } from './config';
 import { BOSS_ARENA_X, BOSS_DEFS, BOSS_TIMES, headBox } from './boss';
 import { CHECKPOINT_SAFE, FINISH_SAFE, START_SAFE, levelLayout } from './level';
 import {
   COMBO_WINDOW, CRUMBLE_TIME, DOUBLE_JUMP_TIME, FREEZE_TIME, MAGNET_TIME, SCARE_TIME, STAR_PICKUPS, advanceEra, beginGame, buildLevel, createGame,
-  frameDelta, groundAt, requestJump, retryEra, starsFor, step, type PowerKind,
+  ROOM_EXIT_X, SECRET_LEDGE, frameDelta, groundAt, requestJump, retryEra, secretPortalBox, starsFor, step, type PowerKind,
   type GameEvent, type GameState
 } from './simulation';
 
@@ -606,6 +606,122 @@ describe('combos', () => {
     expect(state.combo.count).toBe(0);
     expect(collectNext(state)).not.toContain('combo');
     expect(state.combo.count).toBe(1);
+  });
+});
+
+describe('secret rooms', () => {
+  /** A game in the given era with the player standing on the ledge under the secret block. */
+  function underSecret(eraIndexValue: number): GameState {
+    const state = createGame();
+    state.scaresEnabled = false;
+    beginGame(state, eraIndexValue);
+    run(state, idle, 5);
+    state.hazards = [];
+    const secret = state.secret;
+    if (!secret) throw new Error('no secret');
+    state.player.x = secret.x;
+    state.player.y = LEDGES[SECRET_LEDGE][1] - state.player.h;
+    state.player.vy = 0;
+    run(state, idle, 2);
+    return state;
+  }
+
+  it('hides one secret in every era, in a safe spot', () => {
+    ERAS.forEach((era, i) => {
+      const state = createGame();
+      buildLevel(state, i);
+      const secret = state.secret;
+      expect(secret).not.toBeNull();
+      if (!secret) return;
+      const ledge = state.platforms.find(p => p.kind === 'ledge' && p.x === LEDGES[SECRET_LEDGE][0]);
+      expect(ledge?.crumble).toBe(false);
+      expect(secret.x).toBeGreaterThan(LEDGES[SECRET_LEDGE][0]);
+      expect(secret.x + secret.w).toBeLessThan(LEDGES[SECRET_LEDGE][0] + LEDGES[SECRET_LEDGE][2]);
+      expect(secret.x).toBeLessThan(BOSS_ARENA_X - 200);
+      // Low enough that this era's jump from the ledge reaches it.
+      const apex = (era.jump * era.jump) / (2 * era.gravity);
+      expect(LEDGES[SECRET_LEDGE][1] - 44 - apex).toBeLessThan(secret.y + secret.h);
+    });
+  });
+
+  it('breaks only when bonked from below, then opens a portal', () => {
+    const state = underSecret(0);
+    const secret = state.secret;
+    if (!secret) throw new Error('no secret');
+    state.player.y = secret.y - state.player.h - 2;
+    state.player.vy = 200;
+    run(state, idle, 3);
+    expect(secret.state).toBe('hidden');
+    state.player.y = LEDGES[SECRET_LEDGE][1] - state.player.h;
+    state.player.vy = 0;
+    run(state, idle, 2);
+    requestJump(state);
+    const events = run(state, idle, 30);
+    expect(events).toContain('secretBreak');
+    expect(secret.state).toBe('portal');
+    run(state, idle, 60);
+    expect(secret.state).toBe('used');
+    expect(state.room).not.toBeNull();
+  });
+
+  it('leads into a safe bonus room and back out to the same spot', () => {
+    const state = underSecret(2);
+    const secret = state.secret;
+    if (!secret) throw new Error('no secret');
+    const levelPickups = state.pickups;
+    secret.state = 'portal';
+    const portal = secretPortalBox(secret);
+    state.player.x = portal.x + 5;
+    const lives = state.lives;
+    expect(step(state, idle, DT)).toContain('secretEnter');
+    expect(state.room).not.toBeNull();
+    expect(state.lives).toBe(lives + 1);
+    expect(state.hazards).toEqual([]);
+    expect(state.pickups.every(p => p.bonus)).toBe(true);
+    expect(state.cameraX).toBe(0);
+
+    // Gems score but do not count toward the pickup star.
+    const score = state.score;
+    for (const gem of state.pickups) {
+      state.player.x = gem.x - 10;
+      state.player.y = gem.y - 10;
+      step(state, idle, DT);
+    }
+    expect(state.score).toBe(score + 500);
+    expect(state.eraPickups).toBe(0);
+
+    state.player.x = ROOM_EXIT_X + 5;
+    state.player.y = FLOOR - state.player.h;
+    expect(step(state, idle, DT)).toContain('secretExit');
+    expect(state.room).toBeNull();
+    expect(state.pickups).toBe(levelPickups);
+    expect(state.player.x).toBeGreaterThan(secret.x);
+    expect(state.player.y).toBe(LEDGES[SECRET_LEDGE][1] - state.player.h);
+    expect(secret.state).toBe('used');
+  });
+
+  it('never clears the era or fires scares from inside the room', () => {
+    const state = underSecret(0);
+    const secret = state.secret;
+    if (!secret) throw new Error('no secret');
+    secret.state = 'portal';
+    state.player.x = secretPortalBox(secret).x + 5;
+    step(state, idle, DT);
+    state.scaresEnabled = true;
+    state.player.x = 900;
+    const events = run(state, right, 30);
+    expect(events).not.toContain('clear');
+    expect(events).not.toContain('scare');
+    expect(state.player.x + state.player.w).toBeLessThanOrEqual(960);
+  });
+
+  it('resets when the era is retried', () => {
+    const state = underSecret(0);
+    if (state.secret) state.secret.state = 'used';
+    state.phase = 'gameover';
+    retryEra(state);
+    expect(state.secret?.state).toBe('hidden');
+    expect(state.room).toBeNull();
   });
 });
 

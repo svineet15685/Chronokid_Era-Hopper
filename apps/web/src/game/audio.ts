@@ -1,7 +1,7 @@
 // Synthesized sound effects; no external audio assets.
 import type { ScareKind } from './config';
 
-export type SoundName = 'jump' | 'collect' | 'extraLife' | 'hit' | 'advance' | 'checkpoint' | 'powerup' | 'shieldBreak' | 'star' | 'fanfare' | 'bossRoar' | 'bossStomp' | 'bossHit';
+export type SoundName = 'jump' | 'collect' | 'extraLife' | 'hit' | 'advance' | 'checkpoint' | 'powerup' | 'shieldBreak' | 'star' | 'fanfare' | 'bossRoar' | 'bossStomp' | 'bossHit' | 'secretBreak' | 'secretEnter' | 'secretExit';
 
 declare global {
   interface Window { webkitAudioContext?: typeof AudioContext }
@@ -91,6 +91,9 @@ export function createSound() {
     if (name === 'bossRoar') { tone(140, 0.5, 'sawtooth', 0.06, 70); noise(0.35, 0.04, 'lowpass', 600); }
     if (name === 'bossStomp') { tone(70, 0.3, 'sine', 0.12, 35); noise(0.3, 0.06, 'lowpass', 400); }
     if (name === 'bossHit') { tone(520, 0.08, 'square', 0.05, 900); tone(300, 0.2, 'triangle', 0.05, 180, 0.06); }
+    if (name === 'secretBreak') { noise(0.2, 0.06, 'bandpass', 900); [659, 831, 988, 1319].forEach((f, i) => tone(f, 0.1, 'triangle', 0.035, f, 0.08 + i * 0.06)); }
+    if (name === 'secretEnter') [392, 494, 587, 784, 988, 1175].forEach((f, i) => tone(f, 0.16, 'sine', 0.04, f * 1.5, i * 0.05));
+    if (name === 'secretExit') [1175, 988, 784, 587].forEach((f, i) => tone(f, 0.12, 'sine', 0.035, f * 0.7, i * 0.05));
     if (name === 'star') tone(1319, 0.14, 'sine', 0.045, 1760);
     if (name === 'fanfare') [[523, 0], [659, 0.12], [784, 0.24], [1047, 0.36], [784, 0.5], [1047, 0.62]].forEach(([f, at]) => tone(f, at === 0.62 ? 0.4 : 0.12, 'square', 0.04, f, at));
     if (name === 'checkpoint') { tone(523, 0.1, 'triangle', 0.04); tone(659, 0.1, 'triangle', 0.04, 659, 0.09); tone(784, 0.18, 'triangle', 0.045, 784, 0.18); }

@@ -1,7 +1,7 @@
 // Request schemas and run plausibility rules. Pure functions, unit tested without a database.
 // These checks reject impossible submissions; they are not anti-cheat. The game runs in the browser,
 // so a determined player can still submit any plausible score (see SECURITY.md).
-import { DISPLAY_NAME_MAX, GAME_RULES, isAllowedDisplayName } from '@chronokid/shared';
+import { DISPLAY_NAME_MAX, GAME_RULES, isAllowedDisplayName, maxScoreForEras } from '@chronokid/shared';
 import { z } from 'zod';
 
 /**
@@ -24,7 +24,7 @@ export const runIdParams = z.strictObject({ runId: z.uuid() });
 
 export const startRunBody = z.strictObject({ continues: z.uuid().optional() });
 
-const MAX_SCORE = GAME_RULES.eraCount * GAME_RULES.pickupsPerEra * GAME_RULES.pickupPoints;
+const MAX_SCORE = maxScoreForEras(GAME_RULES.eraCount);
 
 export const finishRunBody = z.strictObject({
   score: z.number().int().min(0).max(MAX_SCORE).multipleOf(GAME_RULES.pickupPoints),
@@ -46,7 +46,7 @@ export type Implausible = 'score_exceeds_eras' | 'victory_before_last_era' | 'to
 
 /** Checks a finished run against what the game makes possible, using the server-measured duration. */
 export function checkRunPlausibility(run: FinishRunBody, durationMs: number): Implausible | null {
-  if (run.score > run.eraReached * GAME_RULES.pickupsPerEra * GAME_RULES.pickupPoints) return 'score_exceeds_eras';
+  if (run.score > maxScoreForEras(run.eraReached)) return 'score_exceeds_eras';
   if (run.outcome === 'victory' && run.eraReached !== GAME_RULES.eraCount) return 'victory_before_last_era';
   const erasCrossed = run.outcome === 'victory' ? run.eraReached : run.eraReached - 1;
   if (durationMs < erasCrossed * MIN_ERA_MS) return 'too_fast';

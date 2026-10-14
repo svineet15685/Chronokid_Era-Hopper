@@ -127,6 +127,7 @@ button:active { transform: translateY(2px); box-shadow: 0 2px 0 #819b47; }
 .era-card:disabled:hover { filter: none; transform: none; }
 .era-num { color: var(--lime); font-weight: 900; }
 .era-stars { color: #ffd84d; letter-spacing: 1px; }
+.era-secret { margin-left: 4px; }
 /* Unearned stars: the same shape, dimmed, so 1, 2, and 3 stars are easy to tell apart at any size. */
 .star-off { color: #f6efd94d; text-shadow: none; }
 .difficulty { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: -8px 0 16px; padding: 0; border: 0; }

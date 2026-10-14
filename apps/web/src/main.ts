@@ -297,7 +297,7 @@ function startPractice(eraIndex: number): void {
 }
 
 function renderMap(): void {
-  const { stars } = progress.current;
+  const { stars, secrets } = progress.current;
   eraGrid.replaceChildren(...ERAS.map((era, i) => {
     const item = document.createElement('li');
     const card = document.createElement('button');
@@ -314,7 +314,14 @@ function renderMap(): void {
     badge.className = 'era-stars';
     if (unlocked) renderStarIcons(badge, stars[i]); else badge.textContent = '🔒';
     card.append(num, name, badge);
-    card.setAttribute('aria-label', unlocked ? `Era ${i + 1}, ${era.name}, ${stars[i]} of 3 stars` : `Era ${i + 1}, ${era.name}, locked`);
+    if (unlocked && secrets[i]) {
+      const secret = document.createElement('span');
+      secret.className = 'era-secret';
+      secret.textContent = '🔍';
+      secret.title = 'Secret room found';
+      badge.append(secret);
+    }
+    card.setAttribute('aria-label', unlocked ? `Era ${i + 1}, ${era.name}, ${stars[i]} of 3 stars${secrets[i] ? ', secret room found' : ''}` : `Era ${i + 1}, ${era.name}, locked`);
     card.addEventListener('click', () => startPractice(i));
     item.append(card);
     return item;
@@ -621,6 +628,8 @@ function frame(timestamp: number): void {
     if (event === 'collect') { if (state.combo.count >= 2) sound.combo(state.combo.count); else sound.play('collect'); }
     if (event === 'jump' || event === 'extraLife' || event === 'hit' || event === 'checkpoint' || event === 'powerup' || event === 'shieldBreak' || event === 'bossRoar' || event === 'bossStomp' || event === 'bossHit') sound.play(event);
     if (event === 'bossDefeated') sound.play('fanfare');
+    if (event === 'secretBreak' || event === 'secretEnter' || event === 'secretExit') sound.play(event);
+    if (event === 'secretEnter') { progress.recordSecret(state.eraIndex); pulseHearts(); updateHud(); }
     if (event === 'extraLife') pulseHearts();
     if (event === 'scare' && state.scare) sound.scare(state.scare.kind, spooky());
     if (event === 'collect' || event === 'hit') updateHud();

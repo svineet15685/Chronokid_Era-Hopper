@@ -6,7 +6,7 @@ import { bossBeaten, createBoss, updateBoss, type Boss, type BossEvent } from '.
 import { levelLayout, type HazardSlot } from './level';
 
 export type Phase = 'start' | 'playing' | 'clear' | 'victory' | 'gameover';
-export type GameEvent = 'jump' | 'collect' | 'combo' | 'extraLife' | 'hit' | 'clear' | 'gameover' | 'checkpoint' | 'scare' | 'powerup' | 'shieldBreak' | BossEvent;
+export type GameEvent = 'jump' | 'collect' | 'combo' | 'extraLife' | 'hit' | 'clear' | 'gameover' | 'checkpoint' | 'scare' | 'powerup' | 'shieldBreak' | 'secretBreak' | 'secretEnter' | 'secretExit' | BossEvent;
 
 export interface Box { x: number; y: number; w: number; h: number }
 
@@ -44,11 +44,32 @@ export interface Hazard extends Box {
   timer: number;
 }
 
-export interface Pickup { x: number; y: number; r: number; taken: boolean; phase: number }
+export interface Pickup { x: number; y: number; r: number; taken: boolean; phase: number; /** A secret-room gem: scores, but does not count toward the pickup star. */ bonus?: boolean }
 export interface Particle { x: number; y: number; vx: number; vy: number; life: number; color: string }
 /** Floating text such as "+1 ♥" that drifts up and fades. */
 export interface Popup { x: number; y: number; text: string; life: number }
 export interface Scare { kind: ScareKind; t: number }
+
+export interface Secret extends Box {
+  state: 'hidden' | 'portal' | 'used';
+  /** Seconds until a freshly opened portal can be entered (so it is seen swirling open first). */
+  opening: number;
+}
+
+interface SavedLevel {
+  platforms: Platform[];
+  hazards: Hazard[];
+  pickups: Pickup[];
+  powerups: PowerUp[];
+  boss: Boss | null;
+}
+
+export interface SecretRoom {
+  saved: SavedLevel;
+  /** Where the player comes back out in the level (on the ledge, beside the portal). */
+  exitX: number;
+  exitY: number;
+}
 
 export type PowerKind = 'shield' | 'freeze' | 'magnet' | 'doubleJump';
 export interface PowerUp { x: number; y: number; kind: PowerKind; taken: boolean }
@@ -103,6 +124,10 @@ export interface GameState {
   combo: { count: number; timer: number };
   /** The era's boss, if it has one; the finish stays locked until it is beaten. */
   boss: Boss | null;
+  /** The era's secret: a cracked block to bonk from below, which opens a portal to a bonus room. */
+  secret: Secret | null;
+  /** While inside the secret room, the level saved for the way back. */
+  room: SecretRoom | null;
 }
 
 export interface MoveInput { left: boolean; right: boolean }
@@ -195,6 +220,8 @@ export function buildLevel(state: GameState, eraIndex: number): void {
   state.lastStars = 0;
   state.combo = { count: 0, timer: 0 };
   state.boss = era.boss ? createBoss(era.boss) : null;
+  state.room = null;
+  state.secret = placeSecret();
   state.player = createPlayer();
   state.cameraX = 0;
   state.checkpointX = START_X;
@@ -229,6 +256,67 @@ export function advanceEra(state: GameState): void {
   buildLevel(state, state.eraIndex + 1);
   state.levelStartScore = state.score;
   state.phase = 'playing';
+}
+
+/** The secret floats above this ledge (an even index, so it never crumbles), clear of ground hazards. */
+export const SECRET_LEDGE = 2;
+export const SECRET_SIZE = 30;
+export const PORTAL_OPEN_TIME = 0.8;
+/** Height of the block's bottom above the ledge: every era's jump from the ledge reaches it. */
+const SECRET_LIFT = 100;
+/** The secret room's exit portal, near its right wall. */
+export const ROOM_EXIT_X = W - 110;
+
+function placeSecret(): Secret {
+  const [ledgeX, ledgeY, ledgeW] = LEDGES[SECRET_LEDGE];
+  return { x: ledgeX + ledgeW / 2 - SECRET_SIZE / 2, y: ledgeY - SECRET_LIFT - SECRET_SIZE, w: SECRET_SIZE, h: SECRET_SIZE, state: 'hidden', opening: 0 };
+}
+
+/** The portal opens on top of the ledge, under where the block was. */
+export function secretPortalBox(secret: Secret): Box {
+  const ledgeY = LEDGES[SECRET_LEDGE][1];
+  return { x: secret.x - 10, y: ledgeY - 56, w: SECRET_SIZE + 20, h: 56 };
+}
+
+export const roomExitBox = (): Box => ({ x: ROOM_EXIT_X, y: FLOOR - 56, w: 50, h: 56 });
+
+const flatGround = (w: number): Platform => ({ x: 0, y: FLOOR, w, h: 90, kind: 'ground', crumble: false, crumbleTime: 0, fallen: false, homeY: FLOOR });
+const roomLedge = (x: number, y: number): Platform => ({ x, y, w: 120, h: 18, kind: 'ledge', crumble: false, crumbleTime: 0, fallen: false, homeY: y });
+
+/** Swaps the level for a small, safe bonus room with gems and an extra life. */
+function enterSecretRoom(state: GameState, events: GameEvent[]): void {
+  const { player, secret } = state;
+  if (!secret) return;
+  state.room = {
+    saved: { platforms: state.platforms, hazards: state.hazards, pickups: state.pickups, powerups: state.powerups, boss: state.boss },
+    exitX: secret.x + SECRET_SIZE + 20,
+    exitY: LEDGES[SECRET_LEDGE][1] - player.h
+  };
+  secret.state = 'used';
+  state.platforms = [flatGround(W), roomLedge(300, 380), roomLedge(560, 330)];
+  state.hazards = [];
+  state.powerups = [];
+  state.boss = null;
+  state.pickups = [[200, FLOOR - 70], [360, 345], [470, FLOOR - 90], [620, 295], [760, FLOOR - 70]].map(([x, y], i) => ({ x, y, r: 12, taken: false, phase: i * 0.8, bonus: true }));
+  player.x = 60;
+  player.y = FLOOR - player.h;
+  player.vx = 0;
+  player.vy = 0;
+  state.lives = Math.min(state.lives + 1, DIFFICULTIES[state.difficulty].maxLives);
+  state.popups.push({ x: W / 2, y: 120, text: '+1 ♥', life: POPUP_LIFE * 1.5 });
+  events.push('secretEnter');
+}
+
+function exitSecretRoom(state: GameState, events: GameEvent[]): void {
+  const { room, player } = state;
+  if (!room) return;
+  ({ platforms: state.platforms, hazards: state.hazards, pickups: state.pickups, powerups: state.powerups, boss: state.boss } = room.saved);
+  player.x = room.exitX;
+  player.y = room.exitY;
+  player.vx = 0;
+  player.vy = 0;
+  state.room = null;
+  events.push('secretExit');
 }
 
 /** After a game over: replay this era from the last checkpoint with full lives and the era's starting score. */
@@ -377,6 +465,7 @@ export function step(state: GameState, input: MoveInput, dt: number, random: () 
   player.x = Math.max(0, Math.min(WORLD_END - player.w, player.x));
   // An unbeaten boss blocks the way to the finish flag.
   if (state.boss && !bossBeaten(state.boss)) player.x = Math.min(player.x, state.boss.x + 10 - player.w);
+  if (state.room) player.x = Math.min(player.x, W - player.w);
   player.vy += era.gravity * dt;
   player.y += player.vy * dt;
 
@@ -425,6 +514,27 @@ export function step(state: GameState, input: MoveInput, dt: number, random: () 
     if (hazard.active && overlaps(player, { x: hazard.x + 4, y: hazard.y + 3, w: hazard.w - 8, h: hazard.h - 5 })) hurt(state, events);
   }
 
+  const { secret } = state;
+  if (secret && !state.room) {
+    // Bonk the cracked block from below to open the portal, then walk into the portal.
+    const head = { x: player.x + 4, y: player.y, w: player.w - 8, h: 8 };
+    if (secret.state === 'hidden' && player.vy < 0 && overlaps(head, secret)) {
+      secret.state = 'portal';
+      secret.opening = PORTAL_OPEN_TIME;
+      player.vy = 80;
+      events.push('secretBreak');
+      for (let i = 0; i < 8; i++) {
+        state.particles.push({ x: secret.x + SECRET_SIZE / 2, y: secret.y + SECRET_SIZE / 2, vx: (random() - 0.5) * 260, vy: -random() * 220, life: PARTICLE_LIFE, color: era.top });
+      }
+    } else if (secret.state === 'portal' && secret.opening > 0) {
+      secret.opening = Math.max(0, secret.opening - dt);
+    } else if (secret.state === 'portal' && overlaps(player, secretPortalBox(secret))) {
+      enterSecretRoom(state, events);
+    }
+  } else if (state.room && overlaps(player, roomExitBox())) {
+    exitSecretRoom(state, events);
+  }
+
   if (state.boss) {
     const fight = updateBoss(state.boss, player, frozen ? 0 : dt, ERAS[state.eraIndex].tempo * DIFFICULTIES[state.difficulty].tempo);
     events.push(...fight.events);
@@ -470,7 +580,7 @@ export function step(state: GameState, input: MoveInput, dt: number, random: () 
       pickup.taken = true;
       const before = state.score;
       state.score += PICKUP_POINTS;
-      state.eraPickups++;
+      if (!pickup.bonus) state.eraPickups++;
       events.push('collect');
       state.combo.count = state.combo.timer > 0 ? state.combo.count + 1 : 1;
       state.combo.timer = COMBO_WINDOW;
@@ -501,11 +611,11 @@ export function step(state: GameState, input: MoveInput, dt: number, random: () 
     popup.life -= dt;
   }
   state.popups = state.popups.filter(p => p.life > 0);
-  state.cameraX = Math.max(0, Math.min(WORLD_END - W, player.x - W * 0.32));
+  state.cameraX = state.room ? 0 : Math.max(0, Math.min(WORLD_END - W, player.x - W * 0.32));
   // During a boss fight the camera holds the whole arena in view.
   if (state.boss && state.boss.phase !== 'waiting' && state.boss.phase !== 'leaving') state.cameraX = WORLD_END - W;
 
-  if (state.phase !== 'playing') return events;
+  if (state.phase !== 'playing' || state.room) return events;
   if (state.checkpointX < CHECKPOINT_X && player.x >= CHECKPOINT_X) {
     state.checkpointX = CHECKPOINT_X;
     events.push('checkpoint');

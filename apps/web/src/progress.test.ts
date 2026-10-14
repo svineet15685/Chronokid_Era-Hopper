@@ -14,6 +14,7 @@ describe('progress', () => {
     const tracker = new ProgressTracker(memoryStore());
     expect(tracker.current.reached).toBe(0);
     expect(tracker.current.stars).toEqual(Array(10).fill(0));
+    expect(tracker.current.secrets).toEqual(Array(10).fill(false));
     expect(tracker.isUnlocked(0)).toBe(true);
     expect(tracker.isUnlocked(1)).toBe(false);
   });
@@ -37,12 +38,25 @@ describe('progress', () => {
     expect(tracker.current.reached).toBe(9);
   });
 
+  it('remembers secret rooms found, and keeps them through later clears', () => {
+    const store = memoryStore();
+    const tracker = new ProgressTracker(store);
+    expect(tracker.recordSecret(2)).toBe(true);
+    expect(tracker.recordSecret(2)).toBe(false);
+    expect(tracker.recordSecret(10)).toBe(false);
+    tracker.recordClear(0, 3);
+    expect(store.saved?.secrets[2]).toBe(true);
+    expect(tracker.current.secrets.filter(Boolean)).toHaveLength(1);
+  });
+
   it('totals the best stars across eras', () => {
-    expect(totalStars({ reached: 3, stars: [3, 2, 1, 0, 0, 0, 0, 0, 0, 0] })).toBe(6);
+    expect(totalStars({ reached: 3, stars: [3, 2, 1, 0, 0, 0, 0, 0, 0, 0], secrets: Array(10).fill(false) })).toBe(6);
   });
 
   it('ignores corrupted or tampered saved data', () => {
-    expect(sanitizeProgress('nope')).toEqual({ reached: 0, stars: Array(10).fill(0) });
-    expect(sanitizeProgress({ reached: 99, stars: [7, -1, 'x', 2] })).toEqual({ reached: 9, stars: [3, 0, 0, 2, 0, 0, 0, 0, 0, 0] });
+    const noSecrets = Array(10).fill(false);
+    expect(sanitizeProgress('nope')).toEqual({ reached: 0, stars: Array(10).fill(0), secrets: noSecrets });
+    expect(sanitizeProgress({ reached: 99, stars: [7, -1, 'x', 2] })).toEqual({ reached: 9, stars: [3, 0, 0, 2, 0, 0, 0, 0, 0, 0], secrets: noSecrets });
+    expect(sanitizeProgress({ secrets: [true, 'yes', 1, true] }).secrets).toEqual([true, false, false, true, ...Array(6).fill(false)]);
   });
 });

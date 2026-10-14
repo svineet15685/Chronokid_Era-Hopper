@@ -60,7 +60,7 @@ describe('finish run body', () => {
     { score: -100 },
     { score: 150 },
     { score: 1.5 },
-    { score: 25_100 },
+    { score: 30_100 },
     { score: '100' },
     { eraReached: 0 },
     { eraReached: 11 },
@@ -81,7 +81,9 @@ describe('run plausibility', () => {
   });
 
   it('rejects more points than the eras reached contain', () => {
-    expect(checkRunPlausibility(run(2600, 1), 60_000)).toBe('score_exceeds_eras');
+    // An era holds 25 pickups and 5 secret-room gems: 3,000 points.
+    expect(checkRunPlausibility(run(3000, 1), 60_000)).toBeNull();
+    expect(checkRunPlausibility(run(3100, 1), 60_000)).toBe('score_exceeds_eras');
   });
 
   it('rejects a victory before the last era', () => {

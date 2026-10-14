@@ -94,3 +94,33 @@ test('the era map unlocks reached eras and starts practice runs', async ({ page 
   await loseLastLife(page);
   await expect(page.locator('#online')).toHaveText("Practice run: it doesn't go on the leaderboard.");
 });
+
+test('bonking the secret block opens a portal to a bonus room, and the era map remembers it', async ({ page }, testInfo) => {
+  await startGame(page, isTouch(testInfo.project.name));
+  const lives = await page.evaluate(() => {
+    const { state } = window.__chronokid;
+    state.scaresEnabled = false;
+    state.player.invulnerable = 5;
+    const secret = state.secret;
+    if (!secret) throw new Error('no secret');
+    // Jump into the block from just below it.
+    state.player.x = secret.x;
+    state.player.y = secret.y + secret.h + 2;
+    state.player.vy = -400;
+    return state.lives;
+  });
+  await expect.poll(() => page.evaluate(() => window.__chronokid.state.secret?.state)).not.toBe('hidden');
+  await expect.poll(() => page.evaluate(() => window.__chronokid.state.room !== null)).toBe(true);
+  expect(await page.evaluate(() => window.__chronokid.state.lives)).toBe(lives + 1);
+
+  // Walk out through the exit portal: back in the level, beside the used block.
+  await page.evaluate(() => { window.__chronokid.state.player.x = 840; });
+  await expect.poll(() => page.evaluate(() => window.__chronokid.state.room)).toBeNull();
+  expect(await page.evaluate(() => window.__chronokid.state.secret?.state)).toBe('used');
+
+  await loseLastLife(page);
+  await page.reload();
+  await page.locator('#eras-open').click();
+  await expect(page.locator('.era-card').nth(0)).toHaveAttribute('aria-label', 'Era 1, STONE AGE, 0 of 3 stars, secret room found');
+  await expect(page.locator('.era-card').nth(0)).toContainText('🔍');
+});
