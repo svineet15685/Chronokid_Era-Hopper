@@ -25,6 +25,13 @@
           <div class="controls-copy" id="instructions"><span><kbd>←</kbd> <kbd>→</kbd> move</span><span><kbd>SPACE</kbd> / <kbd>↑</kbd> jump</span><span>Collect everything you can.</span></div>
           <div class="stars" id="stars" hidden><p class="star-row" id="star-row"></p><p class="star-hint" id="star-hint"></p></div>
           <div class="online" id="online" aria-live="polite"></div>
+          <fieldset class="difficulty" id="difficulty">
+            <legend>Difficulty</legend>
+            <label><input type="radio" name="difficulty" value="easy" /><span>Easy</span></label>
+            <label><input type="radio" name="difficulty" value="normal" /><span>Normal</span></label>
+            <label><input type="radio" name="difficulty" value="hard" /><span>Hard</span></label>
+            <p class="difficulty-hint" id="difficulty-hint" aria-live="polite"></p>
+          </fieldset>
           <div class="menu-actions">
             <button id="action">Play Game</button>
             <button class="secondary" id="restart" hidden>Play Again</button>
