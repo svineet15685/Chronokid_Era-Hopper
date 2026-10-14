@@ -9,6 +9,7 @@ import { STAR_PICKUPS, advanceEra, beginGame, createGame, frameDelta, requestJum
 import { OnlineSession } from './online/session';
 import { ProgressTracker } from './progress';
 import { celebrate } from './ui/celebrate';
+import { loadScareStyle, makeGateQuestion, saveScareStyle, type ScareStyle } from './settings';
 import { renderFinishResult, renderJoinPrompt, renderLeaderboard, renderNote } from './ui/online-panel';
 
 function byId<T extends HTMLElement>(id: string): T {
@@ -57,13 +58,25 @@ const erasButton = byId<HTMLButtonElement>('eras-open');
 const mapOverlay = byId('map');
 const eraGrid = byId('era-grid');
 const mapClose = byId<HTMLButtonElement>('map-close');
+const grownupsButton = byId<HTMLButtonElement>('grownups-open');
+const grownupsOverlay = byId('grownups');
+const gateEl = byId('gate');
+const gateQuestion = byId('gate-question');
+const gateChoices = byId('gate-choices');
+const gateNote = byId('gate-note');
+const scareSettings = byId('scare-settings');
+const grownupsClose = byId<HTMLButtonElement>('grownups-close');
 
 const state: GameState = createGame();
 const sound = createSound();
 /** Respects the device setting live, so changing it takes effect without a reload. */
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-const draw = createRenderer(ctx, { reducedMotion });
-const drawScareLayer = createScareLayer(byId<HTMLCanvasElement>('scare-layer'), { reducedMotion });
+/** Chosen by a grown-up; the kid's 👻 toggle (scaresOn) only switches scares on and off within it. */
+let scareStyle: ScareStyle = loadScareStyle();
+let scaresOn = prefs.get('scares', true);
+const spooky = () => scareStyle === 'spooky' && state.scaresEnabled;
+const draw = createRenderer(ctx, { reducedMotion, spooky });
+const drawScareLayer = createScareLayer(byId<HTMLCanvasElement>('scare-layer'), { reducedMotion, spooky });
 const online = new OnlineSession();
 const progress = new ProgressTracker();
 /** Whether the era just cleared beat its previous best stars. */
@@ -99,6 +112,7 @@ function showOverlay(): void {
   onlineEl.replaceChildren();
   leaderboardButton.hidden = state.phase === 'clear';
   erasButton.hidden = state.phase === 'clear';
+  grownupsButton.hidden = state.phase !== 'start';
   starsEl.hidden = state.phase !== 'clear';
   overlay.classList.remove('hidden');
   actionButton.hidden = false;
@@ -301,6 +315,7 @@ boardClose.addEventListener('click', closeBoard);
 window.addEventListener('keydown', event => {
   if (event.key === 'Escape' && !boardOverlay.classList.contains('hidden')) closeBoard();
   if (event.key === 'Escape' && !mapOverlay.classList.contains('hidden')) closeMap();
+  if (event.key === 'Escape' && !grownupsOverlay.classList.contains('hidden')) closeGrownups();
 });
 restartButton.addEventListener('click', start);
 
@@ -313,19 +328,102 @@ soundButton.addEventListener('click', () => {
   renderToggle(soundButton, soundOn, 'sound', '♫', '×');
 });
 
-state.scaresEnabled = prefs.get('scares', true);
-renderToggle(scaresButton, state.scaresEnabled, 'jump scares', '👻', '👻');
-scaresButton.addEventListener('click', () => {
-  state.scaresEnabled = !state.scaresEnabled;
+/** Applies the grown-up style and the kid's toggle to the game and the 👻 button. */
+function applyScares(): void {
+  state.scaresEnabled = scareStyle !== 'off' && scaresOn;
   if (!state.scaresEnabled) state.scare = null;
-  prefs.set('scares', state.scaresEnabled);
-  renderToggle(scaresButton, state.scaresEnabled, 'jump scares', '👻', '👻');
+  scaresButton.disabled = scareStyle === 'off';
+  if (scareStyle === 'off') {
+    scaresButton.textContent = '👻';
+    scaresButton.setAttribute('aria-pressed', 'false');
+    scaresButton.setAttribute('aria-label', 'Jump scares are off (set by a grown-up)');
+  } else renderToggle(scaresButton, state.scaresEnabled, 'jump scares', '👻', '👻');
+}
+applyScares();
+scaresButton.addEventListener('click', () => {
+  if (scareStyle === 'off') return;
+  scaresOn = !scaresOn;
+  prefs.set('scares', scaresOn);
+  applyScares();
+});
+
+/** Grown-ups settings: a multiplication gate, then the scare style. */
+function askGateQuestion(): void {
+  const question = makeGateQuestion();
+  gateQuestion.textContent = question.text;
+  gateChoices.replaceChildren(...question.choices.map(choice => {
+    const option = document.createElement('button');
+    option.type = 'button';
+    option.textContent = String(choice);
+    option.addEventListener('click', () => {
+      if (choice === question.answer) {
+        gateEl.hidden = true;
+        scareSettings.hidden = false;
+        const current = scareSettings.querySelector<HTMLInputElement>(`input[value="${scareStyle}"]`);
+        if (current) { current.checked = true; current.focus({ preventScroll: true }); }
+      } else {
+        gateNote.textContent = 'Not quite. Ask a grown-up to help!';
+        askGateQuestion();
+      }
+    });
+    return option;
+  }));
+  gateChoices.querySelector('button')?.focus({ preventScroll: true });
+}
+
+function openGrownups(): void {
+  gateEl.hidden = false;
+  scareSettings.hidden = true;
+  gateNote.textContent = '';
+  grownupsOverlay.classList.remove('hidden');
+  askGateQuestion();
+}
+
+function closeGrownups(): void {
+  grownupsOverlay.classList.add('hidden');
+  grownupsButton.focus({ preventScroll: true });
+}
+
+grownupsButton.addEventListener('click', openGrownups);
+grownupsClose.addEventListener('click', closeGrownups);
+scareSettings.addEventListener('change', event => {
+  const value = (event.target as HTMLInputElement).value as ScareStyle;
+  scareStyle = value;
+  saveScareStyle(value);
+  applyScares();
 });
 
 const keys = bindInput(document, {
   onJump: () => requestJump(state),
-  onEnter: () => { if (state.phase === 'start' && boardOverlay.classList.contains('hidden') && mapOverlay.classList.contains('hidden')) start(); }
+  onEnter: () => {
+    const menuOpen = [boardOverlay, mapOverlay, grownupsOverlay].some(menu => !menu.classList.contains('hidden'));
+    if (state.phase === 'start' && !menuOpen) start();
+  }
 });
+
+let lastBeat = 0;
+let nextWhisper = 0;
+/** Spooky ambience: a drone while playing, a heartbeat that quickens near hazards, and the odd whisper. */
+function spookySounds(time: number): void {
+  const active = spooky() && state.phase === 'playing' && !state.scare && !document.hidden;
+  sound.setDrone(active);
+  if (!active) return;
+  const { player } = state;
+  let nearest = Infinity;
+  for (const hazard of state.hazards) {
+    if (!hazard.active) continue;
+    nearest = Math.min(nearest, Math.hypot(hazard.x + hazard.w / 2 - (player.x + player.w / 2), hazard.y + hazard.h / 2 - (player.y + player.h / 2)));
+  }
+  if (nearest < 240 && time - lastBeat > 0.35 + (nearest / 240) * 0.55) {
+    sound.heartbeat();
+    lastBeat = time;
+  }
+  if (nextWhisper === 0) nextWhisper = time + 8;
+  if (time > nextWhisper) {
+    sound.whisper();
+    nextWhisper = time + 10 + Math.random() * 12;
+  }
+}
 
 let lastTime = 0;
 function frame(timestamp: number): void {
@@ -336,7 +434,7 @@ function frame(timestamp: number): void {
     if (event === 'collect') { if (state.combo.count >= 2) sound.combo(state.combo.count); else sound.play('collect'); }
     if (event === 'jump' || event === 'extraLife' || event === 'hit' || event === 'checkpoint' || event === 'powerup' || event === 'shieldBreak') sound.play(event);
     if (event === 'extraLife') pulseHearts();
-    if (event === 'scare' && state.scare) sound.scare(state.scare.kind);
+    if (event === 'scare' && state.scare) sound.scare(state.scare.kind, spooky());
     if (event === 'collect' || event === 'hit') updateHud();
     if (event === 'clear') {
       newBestStars = progress.recordClear(state.eraIndex, state.lastStars);
@@ -348,6 +446,7 @@ function frame(timestamp: number): void {
     if (event === 'clear' || event === 'gameover') showOverlay();
     if (event === 'gameover') void submitRun('gameover');
   }
+  spookySounds(timestamp / 1000);
   draw(state, timestamp / 1000);
   drawScareLayer(state.scare);
   requestAnimationFrame(frame);

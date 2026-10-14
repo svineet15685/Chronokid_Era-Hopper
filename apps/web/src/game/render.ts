@@ -14,6 +14,8 @@ const wrap = (value: number, span: number, margin: number) => ((value % (W + spa
 export interface RenderOptions {
   /** When true (the player prefers reduced motion), scares do not shake the screen and the hero does not dance. */
   reducedMotion?: () => boolean;
+  /** Spooky mode: darkness with a glow around the hero, fog, and eyes watching from the background. */
+  spooky?: () => boolean;
 }
 
 export function createRenderer(ctx: CanvasRenderingContext2D, options: RenderOptions = {}): (state: GameState, time?: number) => void {
@@ -552,6 +554,47 @@ export function createRenderer(ctx: CanvasRenderingContext2D, options: RenderOpt
     drawFlag(CHECKPOINT_X + 60 - state.cameraX, reached ? era.accent : '#8a9095', reached ? 94 : 40);
   }
 
+  /**
+   * Spooky atmosphere, drawn over the world but under the HUD: darkness with a soft glow around the hero,
+   * drifting fog, and pairs of eyes that blink in the dark. Cartoon-creepy, nothing gory.
+   */
+  function drawSpooky(state: GameState, time: number): void {
+    const { player, cameraX } = state;
+    const px = player.x + player.w / 2 - cameraX;
+    const py = player.y + player.h / 2;
+    const reduced = options.reducedMotion?.() ?? false;
+    // Brief flickers, like a failing light (not for reduced motion).
+    const flicker = !reduced && Math.sin(time * 13) + Math.sin(time * 7.3) > 1.75 ? 0.15 : 0;
+    const dark = ctx.createRadialGradient(px, py, 70, px, py, 320);
+    dark.addColorStop(0, 'rgba(6, 4, 18, 0)');
+    dark.addColorStop(0.55, `rgba(6, 4, 18, ${0.45 + flicker})`);
+    dark.addColorStop(1, `rgba(6, 4, 18, ${0.82 + flicker})`);
+    ctx.fillStyle = dark;
+    ctx.fillRect(0, 0, W, H);
+
+    // Low fog: soft clouds that drift along the ground.
+    for (let i = 0; i < 6; i++) {
+      const drift = reduced ? 0 : time * (10 + (i % 3) * 5);
+      const fx = wrap(-cameraX * 0.6 + i * 190 + drift, 300, 150);
+      const fy = FLOOR - 10 - (i % 2) * 26;
+      const fog = ctx.createRadialGradient(fx, fy, 10, fx, fy, 150);
+      fog.addColorStop(0, 'rgba(205, 214, 255, 0.2)');
+      fog.addColorStop(1, 'rgba(205, 214, 255, 0)');
+      ctx.fillStyle = fog;
+      ctx.fillRect(fx - 150, fy - 150, 300, 300);
+    }
+
+    // Eyes in the dark; each pair blinks now and then.
+    for (let i = 0; i < 7; i++) {
+      if (Math.sin(time * 0.9 + i * 2.1) > 0.93) continue;
+      const ex = wrap(i * 173 - cameraX * 0.35, 120, 60);
+      const ey = 110 + (i % 4) * 55;
+      const color = i % 3 === 0 ? '#ffd23f' : '#ff3b3b';
+      ctx.globalAlpha = 0.35; circle(ex, ey, 9, color); circle(ex + 18, ey, 9, color);
+      ctx.globalAlpha = 1; circle(ex, ey, 3, color); circle(ex + 18, ey, 3, color);
+    }
+  }
+
   return function draw(state: GameState, time = 0): void {
     const era = ERAS[state.eraIndex];
     const scare = state.scare;
@@ -571,6 +614,7 @@ export function createRenderer(ctx: CanvasRenderingContext2D, options: RenderOpt
     ctx.globalAlpha = 1;
     drawPlayer(state, time);
     drawShieldBubble(state);
+    if (options.spooky?.()) drawSpooky(state, time);
     for (const popup of state.popups) {
       ctx.globalAlpha = Math.min(1, popup.life / (POPUP_LIFE * 0.5));
       ctx.font = '900 26px "Trebuchet MS", "Segoe UI", sans-serif';

@@ -15,6 +15,9 @@ const SCARE_VOICES: Record<ScareKind, 'roar' | 'boo' | 'howl' | 'horn' | 'hiss' 
 export function createSound() {
   let audioContext: AudioContext | null = null;
   let enabled = true;
+  /** Multiplies effect volumes; spooky scares are a little louder (still well below clipping). */
+  let volumeScale = 1;
+  let drone: { stop(): void } | null = null;
 
   /** Creates or resumes the context; call from a user gesture so browsers allow playback. */
   function start(): AudioContext | null {
@@ -48,7 +51,7 @@ export function createSound() {
       lfo.start(at);
       lfo.stop(at + duration);
     }
-    gain.gain.setValueAtTime(volume, at);
+    gain.gain.setValueAtTime(volume * volumeScale, at);
     gain.gain.exponentialRampToValueAtTime(0.001, at + duration);
     oscillator.connect(gain);
     gain.connect(audio.destination);
@@ -68,7 +71,7 @@ export function createSound() {
     source.buffer = buffer;
     shaper.type = filter;
     shaper.frequency.value = frequency;
-    gain.gain.setValueAtTime(volume, audio.currentTime);
+    gain.gain.setValueAtTime(volume * volumeScale, audio.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + duration);
     source.connect(shaper);
     shaper.connect(gain);
@@ -98,8 +101,9 @@ export function createSound() {
   }
 
   /** A short, startling (but not ear-splitting) creature sound. */
-  function scare(kind: ScareKind): void {
+  function scare(kind: ScareKind, louder = false): void {
     if (!enabled) return;
+    volumeScale = louder ? 1.3 : 1;
     switch (SCARE_VOICES[kind]) {
       case 'roar': tone(170, 0.75, 'sawtooth', 0.09, 50); noise(0.55, 0.07, 'lowpass', 700); break;
       case 'boo': tone(340, 0.85, 'sine', 0.11, 165, 0, 28); break;
@@ -112,17 +116,70 @@ export function createSound() {
         tone(150, 0.7, 'sawtooth', 0.08, 45, 0.45);
         break;
     }
+    // All scare sounds are scheduled synchronously above, so later sounds play at normal volume.
+    volumeScale = 1;
+  }
+
+  /** Spooky mode ambience: a low, slowly wavering drone that plays until turned off. */
+  function setDrone(on: boolean): void {
+    if (on && enabled && !drone) {
+      const audio = start();
+      if (!audio) return;
+      const master = audio.createGain();
+      master.gain.value = 0.03;
+      const low = audio.createOscillator();
+      low.type = 'sawtooth';
+      low.frequency.value = 55;
+      const filter = audio.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 220;
+      const high = audio.createOscillator();
+      high.frequency.value = 82.4;
+      const lfo = audio.createOscillator();
+      lfo.frequency.value = 0.2;
+      const depth = audio.createGain();
+      depth.gain.value = 0.012;
+      low.connect(filter).connect(master);
+      high.connect(master);
+      lfo.connect(depth).connect(master.gain);
+      master.connect(audio.destination);
+      for (const node of [low, high, lfo]) node.start();
+      drone = {
+        stop() {
+          master.gain.setTargetAtTime(0, audio.currentTime, 0.1);
+          for (const node of [low, high, lfo]) node.stop(audio.currentTime + 0.5);
+        }
+      };
+    } else if ((!on || !enabled) && drone) {
+      drone.stop();
+      drone = null;
+    }
+  }
+
+  /** Lub-dub, for spooky mode when danger is close. */
+  function heartbeat(): void {
+    if (!enabled) return;
+    tone(62, 0.12, 'sine', 0.13, 40);
+    tone(58, 0.14, 'sine', 0.09, 38, 0.2);
+  }
+
+  /** A faint, breathy whisper now and then in spooky mode. */
+  function whisper(): void {
+    if (!enabled) return;
+    noise(0.7, 0.025, 'bandpass', 1800);
   }
 
   function toggle(): boolean {
     enabled = !enabled;
+    if (!enabled) setDrone(false);
     if (enabled) start();
     return enabled;
   }
 
   function setEnabled(on: boolean): void {
     enabled = on;
+    if (!enabled) setDrone(false);
   }
 
-  return { start, play, combo, scare, toggle, setEnabled };
+  return { start, play, combo, scare, setDrone, heartbeat, whisper, toggle, setEnabled };
 }
