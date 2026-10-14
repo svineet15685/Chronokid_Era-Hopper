@@ -1,6 +1,6 @@
 import { GAME_RULES } from '@chronokid/shared';
 import { describe, expect, it } from 'vitest';
-import { CHECKPOINT_X, ERAS, FLOOR, H, HAZARD_XS, SKINS, START_X, WORLD_END, type EraId } from './config';
+import { CHECKPOINT_X, DIFFICULTIES, ERAS, FLOOR, H, HAZARD_XS, SKINS, START_X, WORLD_END, type EraId } from './config';
 import { CHECKPOINT_SAFE, FINISH_SAFE, START_SAFE, levelLayout } from './level';
 import {
   COMBO_WINDOW, CRUMBLE_TIME, DOUBLE_JUMP_TIME, FREEZE_TIME, MAGNET_TIME, SCARE_TIME, STAR_PICKUPS, advanceEra, beginGame, buildLevel, createGame,
@@ -602,6 +602,65 @@ describe('combos', () => {
     expect(state.combo.count).toBe(0);
     expect(collectNext(state)).not.toContain('combo');
     expect(state.combo.count).toBe(1);
+  });
+});
+
+describe('difficulty', () => {
+  function started(difficulty: 'easy' | 'normal' | 'hard', era: EraId = 'stone'): GameState {
+    const state = createGame();
+    state.scaresEnabled = false;
+    state.difficulty = difficulty;
+    beginGame(state, eraIndex(era));
+    return state;
+  }
+
+  it.each([['easy', 5], ['normal', 3], ['hard', 2]] as const)('%s starts and retries with %i lives', (difficulty, lives) => {
+    const state = started(difficulty);
+    expect(state.lives).toBe(lives);
+    state.lives = 0;
+    state.phase = 'gameover';
+    retryEra(state);
+    expect(state.lives).toBe(lives);
+  });
+
+  it('scales hazard speed: easy is slower and hard is faster', () => {
+    const moved = (difficulty: 'easy' | 'normal' | 'hard') => {
+      const state = started(difficulty, 'pirate');
+      state.pickups = [];
+      const ball = state.hazards.find(h => h.kind === 'projectile');
+      if (!ball) throw new Error('no cannonball');
+      state.hazards = [ball];
+      state.player.x = START_X;
+      ball.x = ball.baseX;
+      step(state, idle, DT);
+      return ball.baseX - ball.x;
+    };
+    expect(moved('easy') / moved('normal')).toBeCloseTo(0.75);
+    expect(moved('hard') / moved('normal')).toBeCloseTo(1.25);
+  });
+
+  it('gives more recovery time on easy and less on hard', () => {
+    for (const difficulty of ['easy', 'normal', 'hard'] as const) {
+      const state = started(difficulty, 'medieval');
+      run(state, idle, 5);
+      state.pickups = [];
+      state.hazards = [state.hazards[0]];
+      state.player.x = state.hazards[0].x;
+      step(state, idle, DT);
+      expect(state.player.invulnerable).toBeCloseTo(DIFFICULTIES[difficulty].invulnerable, 1);
+    }
+  });
+
+  it('caps extra lives per difficulty', () => {
+    const state = started('hard');
+    state.hazards = [];
+    state.lives = 3;
+    state.score = 1900;
+    const pickup = state.pickups[0];
+    state.player.x = pickup.x - 10;
+    state.player.y = pickup.y - 10;
+    expect(step(state, idle, DT)).not.toContain('extraLife');
+    expect(state.lives).toBe(3);
   });
 });
 

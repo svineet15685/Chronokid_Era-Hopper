@@ -1,7 +1,7 @@
 import type { RunOutcome } from '@chronokid/shared';
 import './style.css';
 import { createSound } from './game/audio';
-import { CHECKPOINT_X, ERAS, LAST_ERA, START_LIVES } from './game/config';
+import { CHECKPOINT_X, DIFFICULTIES, ERAS, LAST_ERA, type Difficulty } from './game/config';
 import { bindInput } from './game/input';
 import { createRenderer } from './game/render';
 import { createScareLayer } from './game/scares';
@@ -10,7 +10,7 @@ import { OnlineSession } from './online/session';
 import { ProgressTracker, totalStars } from './progress';
 import { OUTFITS, drawHero, newlyUnlocked, outfitUnlocked, type OutfitId } from './game/hero';
 import { celebrate } from './ui/celebrate';
-import { loadOutfit, loadScareStyle, makeGateQuestion, saveOutfit, saveScareStyle, type ScareStyle } from './settings';
+import { loadDifficulty, loadOutfit, loadScareStyle, makeGateQuestion, saveDifficulty, saveOutfit, saveScareStyle, type ScareStyle } from './settings';
 import { renderFinishResult, renderJoinPrompt, renderLeaderboard, renderNote } from './ui/online-panel';
 
 function byId<T extends HTMLElement>(id: string): T {
@@ -61,6 +61,8 @@ const eraGrid = byId('era-grid');
 const mapClose = byId<HTMLButtonElement>('map-close');
 const grownupsButton = byId<HTMLButtonElement>('grownups-open');
 const looksButton = byId<HTMLButtonElement>('looks-open');
+const difficultyEl = byId('difficulty');
+const difficultyHint = byId('difficulty-hint');
 const looksOverlay = byId('looks');
 const looksGrid = byId('looks-grid');
 const looksNote = byId('looks-note');
@@ -110,7 +112,7 @@ function setTitle(line: string, emphasis: string): void {
 
 function updateHud(): void {
   scoreEl.textContent = pad(state.score);
-  heartsEl.textContent = '♥'.repeat(Math.max(0, state.lives)) + '♡'.repeat(Math.max(0, START_LIVES - state.lives));
+  heartsEl.textContent = '♥'.repeat(Math.max(0, state.lives)) + '♡'.repeat(Math.max(0, DIFFICULTIES[state.difficulty].lives - state.lives));
   eraEl.textContent = `${state.eraIndex + 1}/${ERAS.length} ${ERAS[state.eraIndex].name}`;
 }
 
@@ -127,6 +129,7 @@ function showOverlay(): void {
   leaderboardButton.hidden = state.phase === 'clear';
   erasButton.hidden = state.phase === 'clear';
   looksButton.hidden = state.phase === 'clear';
+  difficultyEl.hidden = state.phase !== 'start';
   grownupsButton.hidden = state.phase !== 'start';
   starsEl.hidden = state.phase !== 'clear';
   overlay.classList.remove('hidden');
@@ -203,9 +206,12 @@ function hideOverlay(): void {
   restartButton.hidden = true;
 }
 
+/** Only leaderboard difficulties (Normal and Hard) register runs with the server. */
+const submitsRuns = () => state.mode === 'campaign' && DIFFICULTIES[state.difficulty].leaderboard;
+
 function start(): void {
   sound.start();
-  online.startRun();
+  if (DIFFICULTIES[state.difficulty].leaderboard) online.startRun();
   beginGame(state);
   updateHud();
   hideOverlay();
@@ -226,7 +232,7 @@ function advance(): void {
 
 function retry(): void {
   sound.start();
-  if (state.mode === 'campaign') online.continueRun();
+  if (submitsRuns()) online.continueRun();
   retryEra(state);
   updateHud();
   hideOverlay();
@@ -236,6 +242,10 @@ function retry(): void {
 async function submitRun(outcome: RunOutcome): Promise<void> {
   if (state.mode === 'practice') {
     renderNote(onlineEl, "Practice run: it doesn't go on the leaderboard.");
+    return;
+  }
+  if (!DIFFICULTIES[state.difficulty].leaderboard) {
+    renderNote(onlineEl, `${DIFFICULTIES[state.difficulty].label} mode: scores don't go on the leaderboard.`);
     return;
   }
   const shownOn = screen;
@@ -401,6 +411,30 @@ soundButton.addEventListener('click', () => {
   soundOn = sound.toggle();
   prefs.set('sound', soundOn);
   renderToggle(soundButton, soundOn, 'sound', '♫', '×');
+});
+
+const DIFFICULTY_HINTS: Record<Difficulty, string> = {
+  easy: "5 lives and slower hazards. Scores don't go on the leaderboard.",
+  normal: '3 lives. The classic challenge.',
+  hard: '2 lives, faster hazards, and less time to recover.'
+};
+
+function applyDifficulty(difficulty: Difficulty): void {
+  state.difficulty = difficulty;
+  const radio = difficultyEl.querySelector<HTMLInputElement>(`input[value="${difficulty}"]`);
+  if (radio) radio.checked = true;
+  difficultyHint.textContent = DIFFICULTY_HINTS[difficulty];
+  // Before a game, preview the lives this difficulty starts with.
+  if (state.phase === 'start') {
+    state.lives = DIFFICULTIES[difficulty].lives;
+    updateHud();
+  }
+}
+applyDifficulty(loadDifficulty());
+difficultyEl.addEventListener('change', event => {
+  const value = (event.target as HTMLInputElement).value as Difficulty;
+  saveDifficulty(value);
+  applyDifficulty(value);
 });
 
 /** Applies the grown-up style and the kid's toggle to the game and the 👻 button. */

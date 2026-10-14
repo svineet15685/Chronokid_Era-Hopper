@@ -13,6 +13,27 @@ export const PICKUP_POINTS = GAME_RULES.pickupPoints;
 export const EXTRA_LIFE_POINTS = 2000;
 export const MAX_LIVES = 5;
 
+export type Difficulty = 'easy' | 'normal' | 'hard';
+
+export interface DifficultyRules {
+  label: string;
+  lives: number;
+  /** Extra lives stop here. */
+  maxLives: number;
+  /** Multiplies how fast hazards move and blink. */
+  tempo: number;
+  /** Seconds of safety after a hit. */
+  invulnerable: number;
+  /** Whether runs on this difficulty are submitted to the leaderboard (Easy is not, to keep it fair). */
+  leaderboard: boolean;
+}
+
+export const DIFFICULTIES: Record<Difficulty, DifficultyRules> = {
+  easy: { label: 'Easy', lives: 5, maxLives: 7, tempo: 0.75, invulnerable: 2, leaderboard: false },
+  normal: { label: 'Normal', lives: START_LIVES, maxLives: MAX_LIVES, tempo: 1, invulnerable: 1.25, leaderboard: true },
+  hard: { label: 'Hard', lives: 2, maxLives: 3, tempo: 1.25, invulnerable: 0.9, leaderboard: true }
+};
+
 export type Collectible = 'berry' | 'coin' | 'core' | 'gem' | 'star' | 'candy' | 'cog';
 export type EraId = 'stone' | 'egypt' | 'viking' | 'medieval' | 'pirate' | 'west' | 'haunted' | 'steam' | 'future' | 'end';
 export type ScareKind = 'trex' | 'mummy' | 'wolf' | 'dragon' | 'kraken' | 'train' | 'ghost' | 'steambot' | 'robot' | 'timeeater';

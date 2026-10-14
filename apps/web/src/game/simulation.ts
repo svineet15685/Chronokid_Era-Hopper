@@ -1,6 +1,6 @@
 // Pure game simulation: no DOM, audio, or canvas access, so it can be unit tested.
 // The first era keeps the original prototype's numbers and ordering.
-import { CHECKPOINT_X, ERAS, EXTRA_LIFE_POINTS, FLOOR, H, LAST_ERA, LEDGES, MAX_LIVES, PICKUP_POINTS, SKINS, START_LIVES, START_X, W, WORLD_END, type HazardKind, type ScareKind, type SkinName } from './config';
+import { CHECKPOINT_X, DIFFICULTIES, ERAS, EXTRA_LIFE_POINTS, FLOOR, H, LAST_ERA, LEDGES, PICKUP_POINTS, SKINS, START_LIVES, START_X, W, WORLD_END, type Difficulty, type HazardKind, type ScareKind, type SkinName } from './config';
 import { GAME_RULES } from '@chronokid/shared';
 import { levelLayout, type HazardSlot } from './level';
 
@@ -87,6 +87,8 @@ export interface GameState {
   particles: Particle[];
   popups: Popup[];
   mode: GameMode;
+  /** Set before a game starts; changes lives, hazard speed, and recovery time. */
+  difficulty: Difficulty;
   powerups: PowerUp[];
   effects: Effects;
   /** Drives hazard motion; it stops while a time freeze is active. */
@@ -116,7 +118,6 @@ const PROJECTILE_LEAD = 260;
 const PROJECTILE_TRAVEL = 520;
 const ICE_ACCEL = 3.5;
 const ICE_FRICTION = 1.2;
-const INVULNERABLE_TIME = 1.25;
 const COYOTE_TIME = 0.1;
 const JUMP_BUFFER_TIME = 0.14;
 const FINISH_MARGIN = 28;
@@ -198,7 +199,7 @@ export function buildLevel(state: GameState, eraIndex: number): void {
 }
 
 export function createGame(): GameState {
-  const state = { phase: 'start', eraIndex: 0, score: 0, levelStartScore: 0, lives: START_LIVES, cameraX: 0, elapsed: 0, hazardClock: 0, scaresEnabled: true, mode: 'campaign' } as GameState;
+  const state = { phase: 'start', eraIndex: 0, score: 0, levelStartScore: 0, lives: START_LIVES, cameraX: 0, elapsed: 0, hazardClock: 0, scaresEnabled: true, mode: 'campaign', difficulty: 'normal' } as GameState;
   buildLevel(state, 0);
   return state;
 }
@@ -208,7 +209,7 @@ export function beginGame(state: GameState, eraIndex = 0, mode: GameMode = 'camp
   state.mode = mode;
   state.score = 0;
   state.levelStartScore = 0;
-  state.lives = START_LIVES;
+  state.lives = DIFFICULTIES[state.difficulty].lives;
   state.elapsed = 0;
   state.hazardClock = 0;
   buildLevel(state, eraIndex);
@@ -231,7 +232,7 @@ export function retryEra(state: GameState): void {
   const checkpointX = state.checkpointX;
   buildLevel(state, state.eraIndex);
   state.score = state.levelStartScore;
-  state.lives = START_LIVES;
+  state.lives = DIFFICULTIES[state.difficulty].lives;
   state.checkpointX = checkpointX;
   state.player.x = checkpointX;
   state.scareTriggers = state.scareTriggers.filter(x => x > checkpointX);
@@ -257,7 +258,7 @@ function hurt(state: GameState, events: GameEvent[]): void {
     // The shield takes the hit instead of a life, with a short grace period and the usual knockback.
     state.effects.shield = false;
     events.push('shieldBreak');
-    player.invulnerable = INVULNERABLE_TIME;
+    player.invulnerable = DIFFICULTIES[state.difficulty].invulnerable;
     player.vy = -360;
     player.vx = -player.facing * 210;
     return;
@@ -265,7 +266,7 @@ function hurt(state: GameState, events: GameEvent[]): void {
   state.lives--;
   state.eraHits++;
   events.push('hit');
-  player.invulnerable = INVULNERABLE_TIME;
+  player.invulnerable = DIFFICULTIES[state.difficulty].invulnerable;
   player.vy = -360;
   player.vx = -player.facing * 210;
   if (state.lives <= 0) {
@@ -291,7 +292,7 @@ function respawn(state: GameState): void {
 }
 
 function updateHazard(state: GameState, hazard: Hazard, dt: number): void {
-  const tempo = ERAS[state.eraIndex].tempo;
+  const tempo = ERAS[state.eraIndex].tempo * DIFFICULTIES[state.difficulty].tempo;
   const t = state.hazardClock * tempo;
   const { player } = state;
   switch (hazard.kind) {
@@ -457,7 +458,7 @@ export function step(state: GameState, input: MoveInput, dt: number, random: () 
         events.push('combo');
         state.popups.push({ x: pickup.x, y: pickup.y - 18, text: `x${state.combo.count}${state.combo.count >= 5 ? '!' : ''}`, life: POPUP_LIFE * 0.7 });
       }
-      if (Math.floor(state.score / EXTRA_LIFE_POINTS) > Math.floor(before / EXTRA_LIFE_POINTS) && state.lives < MAX_LIVES) {
+      if (Math.floor(state.score / EXTRA_LIFE_POINTS) > Math.floor(before / EXTRA_LIFE_POINTS) && state.lives < DIFFICULTIES[state.difficulty].maxLives) {
         state.lives++;
         events.push('extraLife');
         state.popups.push({ x: player.x + player.w / 2, y: player.y - 12, text: '+1 ♥', life: POPUP_LIFE });

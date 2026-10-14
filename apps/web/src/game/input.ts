@@ -8,10 +8,15 @@ export interface InputHandlers {
 
 const PREVENT_DEFAULT = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'Space'];
 
+const isFormControl = (target: EventTarget | null) =>
+  target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement;
+
 export function bindInput(touchRoot: ParentNode, handlers: InputHandlers): MoveInput {
   const keys: MoveInput = { left: false, right: false };
 
   window.addEventListener('keydown', event => {
+    // Let form controls (such as the difficulty choice) use arrows and Space normally; Enter still starts the game.
+    if (isFormControl(event.target) && event.code !== 'Enter') return;
     if (PREVENT_DEFAULT.includes(event.code)) event.preventDefault();
     if (event.code === 'ArrowLeft' || event.code === 'KeyA') keys.left = true;
     if (event.code === 'ArrowRight' || event.code === 'KeyD') keys.right = true;
@@ -19,6 +24,7 @@ export function bindInput(touchRoot: ParentNode, handlers: InputHandlers): MoveI
     if (event.code === 'Enter') handlers.onEnter();
   });
   window.addEventListener('keyup', event => {
+    if (isFormControl(event.target)) return;
     if (PREVENT_DEFAULT.includes(event.code)) event.preventDefault();
     if (event.code === 'ArrowLeft' || event.code === 'KeyA') keys.left = false;
     if (event.code === 'ArrowRight' || event.code === 'KeyD') keys.right = false;
