@@ -167,15 +167,16 @@ button:active { transform: translateY(2px); box-shadow: 0 2px 0 #819b47; }
   touch-action: none;
 }
 .mobile-controls button.jump { width: 66px; min-width: 66px; color: var(--ink); background: var(--lime); border: 0; font-size: 11px; }
-.sound-toggle, .scare-toggle {
+.sound-toggle, .scare-toggle, .music-toggle {
   position: absolute; z-index: 4; right: 18px; bottom: 16px; width: 38px; min-width: 38px; height: 36px; min-height: 36px;
   padding: 0; border: 1px solid #fff4; color: white; background: #10201f9c; font-size: 16px; box-shadow: none;
 }
 .scare-toggle { right: 62px; }
+.music-toggle { right: 106px; }
 /* Full-screen jump scare layer, above the game and menus. */
 .scare-layer { position: fixed; z-index: 10; inset: 0; width: 100vw; height: 100vh; pointer-events: none; }
 .scare-layer[hidden] { display: none; }
-.scare-toggle[aria-pressed="false"] { opacity: .45; filter: grayscale(1); }
+.scare-toggle[aria-pressed="false"], .music-toggle[aria-pressed="false"] { opacity: .45; filter: grayscale(1); }
 @media (pointer: coarse), (max-width: 700px) {
   .mobile-controls { display: flex; }
   .topbar { inset: 10px 12px auto; }
@@ -184,8 +185,9 @@ button:active { transform: translateY(2px); box-shadow: 0 2px 0 #819b47; }
   .hud-label { font-size: 8px; }
   .era-pill { padding: 5px 7px; }
   #hearts { font-size: 13px; }
-  .sound-toggle, .scare-toggle { right: 12px; bottom: auto; top: 48px; width: 30px; min-width: 30px; height: 30px; min-height: 30px; font-size: 14px; }
+  .sound-toggle, .scare-toggle, .music-toggle { right: 12px; bottom: auto; top: 48px; width: 30px; min-width: 30px; height: 30px; min-height: 30px; font-size: 14px; }
   .scare-toggle { right: 48px; }
+  .music-toggle { right: 84px; }
   .subtitle { font-size: 13px; margin: 11px 0 15px; }
   .controls-copy { margin-bottom: 15px; }
   .overlay { background: #111b1acc; }
@@ -233,6 +235,6 @@ button:active { transform: translateY(2px); box-shadow: 0 2px 0 #819b47; }
 @media (orientation: portrait) {
   .overlay { position: fixed; }
   /* Keep the toggles in the screen corner, clear of the centered menus. */
-  .sound-toggle, .scare-toggle { position: fixed; top: calc(12px + env(safe-area-inset-top)); bottom: auto; }
+  .sound-toggle, .scare-toggle, .music-toggle { position: fixed; top: calc(12px + env(safe-area-inset-top)); bottom: auto; }
   .mobile-controls { position: fixed; inset: auto 16px calc(18px + env(safe-area-inset-bottom)); }
 }

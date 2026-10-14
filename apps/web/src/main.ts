@@ -5,6 +5,7 @@ import { CHECKPOINT_X, DIFFICULTIES, ERAS, LAST_ERA, type Difficulty } from './g
 import { bindInput } from './game/input';
 import { createRenderer } from './game/render';
 import { createScareLayer } from './game/scares';
+import { TUNES, createMusic, dangerVariant, spookyVariant } from './game/music';
 import { STAR_PICKUPS, advanceEra, beginGame, createGame, frameDelta, requestJump, retryEra, step, type GameState } from './game/simulation';
 import { OnlineSession } from './online/session';
 import { ProgressTracker, totalStars } from './progress';
@@ -44,6 +45,7 @@ const instructionsEl = byId('instructions');
 const actionButton = byId<HTMLButtonElement>('action');
 const restartButton = byId<HTMLButtonElement>('restart');
 const soundButton = byId<HTMLButtonElement>('sound');
+const musicButton = byId<HTMLButtonElement>('music');
 const scaresButton = byId<HTMLButtonElement>('scares');
 const onlineEl = byId('online');
 const leaderboardButton = byId<HTMLButtonElement>('leaderboard-open');
@@ -404,6 +406,24 @@ window.addEventListener('keydown', event => {
 });
 restartButton.addEventListener('click', start);
 
+/** Background music; the ♫ sound button silences everything, the 🎶 button just the music. */
+const music = createMusic(() => sound.start());
+let musicOn = prefs.get('music', true);
+renderToggle(musicButton, musicOn, 'music', '🎶', '🎶');
+musicButton.addEventListener('click', () => {
+  musicOn = !musicOn;
+  prefs.set('music', musicOn);
+  renderToggle(musicButton, musicOn, 'music', '🎶', '🎶');
+});
+
+/** The era's tune, in its spooky version when needed, and faster on the last life. */
+function currentTune() {
+  let tune = TUNES[ERAS[state.eraIndex].id];
+  if (spooky()) tune = spookyVariant(tune);
+  if (state.lives === 1) tune = dangerVariant(tune);
+  return tune;
+}
+
 let soundOn = prefs.get('sound', true);
 sound.setEnabled(soundOn);
 renderToggle(soundButton, soundOn, 'sound', '♫', '×');
@@ -558,6 +578,7 @@ function frame(timestamp: number): void {
     if (event === 'gameover') void submitRun('gameover');
   }
   spookySounds(timestamp / 1000);
+  music.update(musicOn && state.phase === 'playing' && !state.scare && !document.hidden, currentTune());
   draw(state, timestamp / 1000);
   drawScareLayer(state.scare);
   requestAnimationFrame(frame);
