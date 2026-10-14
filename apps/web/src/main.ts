@@ -7,9 +7,10 @@ import { createRenderer } from './game/render';
 import { createScareLayer } from './game/scares';
 import { STAR_PICKUPS, advanceEra, beginGame, createGame, frameDelta, requestJump, retryEra, step, type GameState } from './game/simulation';
 import { OnlineSession } from './online/session';
-import { ProgressTracker } from './progress';
+import { ProgressTracker, totalStars } from './progress';
+import { OUTFITS, drawHero, newlyUnlocked, outfitUnlocked, type OutfitId } from './game/hero';
 import { celebrate } from './ui/celebrate';
-import { loadScareStyle, makeGateQuestion, saveScareStyle, type ScareStyle } from './settings';
+import { loadOutfit, loadScareStyle, makeGateQuestion, saveOutfit, saveScareStyle, type ScareStyle } from './settings';
 import { renderFinishResult, renderJoinPrompt, renderLeaderboard, renderNote } from './ui/online-panel';
 
 function byId<T extends HTMLElement>(id: string): T {
@@ -59,6 +60,11 @@ const mapOverlay = byId('map');
 const eraGrid = byId('era-grid');
 const mapClose = byId<HTMLButtonElement>('map-close');
 const grownupsButton = byId<HTMLButtonElement>('grownups-open');
+const looksButton = byId<HTMLButtonElement>('looks-open');
+const looksOverlay = byId('looks');
+const looksGrid = byId('looks-grid');
+const looksNote = byId('looks-note');
+const looksClose = byId<HTMLButtonElement>('looks-close');
 const grownupsOverlay = byId('grownups');
 const gateEl = byId('gate');
 const gateQuestion = byId('gate-question');
@@ -75,12 +81,20 @@ const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)'
 let scareStyle: ScareStyle = loadScareStyle();
 let scaresOn = prefs.get('scares', true);
 const spooky = () => scareStyle === 'spooky' && state.scaresEnabled;
-const draw = createRenderer(ctx, { reducedMotion, spooky });
+const progress = new ProgressTracker();
+let chosenOutfit: OutfitId = loadOutfit();
+/** The chosen outfit if its stars are earned; otherwise Classic (for example after progress was cleared). */
+const outfit = (): OutfitId => {
+  const choice = OUTFITS.find(o => o.id === chosenOutfit);
+  return choice && outfitUnlocked(choice, totalStars(progress.current)) ? choice.id : 'classic';
+};
+const draw = createRenderer(ctx, { reducedMotion, spooky, outfit });
 const drawScareLayer = createScareLayer(byId<HTMLCanvasElement>('scare-layer'), { reducedMotion, spooky });
 const online = new OnlineSession();
-const progress = new ProgressTracker();
 /** Whether the era just cleared beat its previous best stars. */
 let newBestStars = false;
+/** Outfits unlocked by the era just cleared, announced on the clear screen. */
+let freshLooks: string[] = [];
 let actionHandler = start;
 /** Bumped whenever a menu changes, so slow network replies never write into a newer screen. */
 let screen = 0;
@@ -112,6 +126,7 @@ function showOverlay(): void {
   onlineEl.replaceChildren();
   leaderboardButton.hidden = state.phase === 'clear';
   erasButton.hidden = state.phase === 'clear';
+  looksButton.hidden = state.phase === 'clear';
   grownupsButton.hidden = state.phase !== 'start';
   starsEl.hidden = state.phase !== 'clear';
   overlay.classList.remove('hidden');
@@ -176,6 +191,7 @@ function renderStars(): void {
   starHintEl.textContent = tips.length
     ? `${newBestStars ? 'New best! ' : ''}Next time, ${tips.join(' and ')} for more stars.`
     : `${newBestStars ? 'New best! ' : ''}Perfect era!`;
+  if (freshLooks.length) starHintEl.textContent += ` New look unlocked: ${freshLooks.join(', ')}! Try it in 👕 Looks.`;
 }
 
 function hideOverlay(): void {
@@ -295,6 +311,62 @@ function closeMap(restoreFocus = true): void {
   if (restoreFocus) erasButton.focus({ preventScroll: true });
 }
 
+/** Wardrobe: every outfit with a preview; locked ones show the stars they need. */
+function renderLooks(): void {
+  const stars = totalStars(progress.current);
+  looksNote.textContent = `You have ${stars} of 30 ★. Earn stars in each era to unlock new looks.`;
+  const current = outfit();
+  looksGrid.replaceChildren(...OUTFITS.map(look => {
+    const item = document.createElement('li');
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'look-card';
+    const unlocked = outfitUnlocked(look, stars);
+    card.disabled = !unlocked;
+    card.setAttribute('aria-pressed', String(look.id === current));
+    card.setAttribute('aria-label', unlocked ? look.name : `${look.name}, locked, needs ${look.stars} stars`);
+    const preview = document.createElement('canvas');
+    preview.width = 56;
+    preview.height = 76;
+    preview.setAttribute('aria-hidden', 'true');
+    const pctx = preview.getContext('2d');
+    if (pctx) {
+      pctx.translate(7, 18);
+      pctx.scale(1.2, 1.2);
+      if (!unlocked) pctx.globalAlpha = 0.35;
+      drawHero(pctx, 0, { outfit: look.id, armsUp: false });
+    }
+    const name = document.createElement('span');
+    name.textContent = look.name;
+    card.append(preview, name);
+    if (!unlocked) {
+      const need = document.createElement('span');
+      need.className = 'look-need';
+      need.textContent = `🔒 ${look.stars} ★`;
+      card.append(need);
+    }
+    card.addEventListener('click', () => {
+      chosenOutfit = look.id;
+      saveOutfit(look.id);
+      renderLooks();
+      looksGrid.querySelector<HTMLButtonElement>('[aria-pressed="true"]')?.focus({ preventScroll: true });
+    });
+    item.append(card);
+    return item;
+  }));
+}
+
+function openLooks(): void {
+  renderLooks();
+  looksOverlay.classList.remove('hidden');
+  looksGrid.querySelector<HTMLButtonElement>('[aria-pressed="true"]')?.focus({ preventScroll: true });
+}
+
+function closeLooks(): void {
+  looksOverlay.classList.add('hidden');
+  looksButton.focus({ preventScroll: true });
+}
+
 function closeBoard(): void {
   boardView++;
   boardOverlay.classList.add('hidden');
@@ -310,12 +382,15 @@ function renderToggle(button: HTMLButtonElement, on: boolean, label: string, onT
 actionButton.addEventListener('click', () => actionHandler());
 leaderboardButton.addEventListener('click', () => void openBoard());
 erasButton.addEventListener('click', openMap);
+looksButton.addEventListener('click', openLooks);
+looksClose.addEventListener('click', closeLooks);
 mapClose.addEventListener('click', () => closeMap());
 boardClose.addEventListener('click', closeBoard);
 window.addEventListener('keydown', event => {
   if (event.key === 'Escape' && !boardOverlay.classList.contains('hidden')) closeBoard();
   if (event.key === 'Escape' && !mapOverlay.classList.contains('hidden')) closeMap();
   if (event.key === 'Escape' && !grownupsOverlay.classList.contains('hidden')) closeGrownups();
+  if (event.key === 'Escape' && !looksOverlay.classList.contains('hidden')) closeLooks();
 });
 restartButton.addEventListener('click', start);
 
@@ -396,7 +471,7 @@ scareSettings.addEventListener('change', event => {
 const keys = bindInput(document, {
   onJump: () => requestJump(state),
   onEnter: () => {
-    const menuOpen = [boardOverlay, mapOverlay, grownupsOverlay].some(menu => !menu.classList.contains('hidden'));
+    const menuOpen = [boardOverlay, mapOverlay, grownupsOverlay, looksOverlay].some(menu => !menu.classList.contains('hidden'));
     if (state.phase === 'start' && !menuOpen) start();
   }
 });
@@ -437,7 +512,9 @@ function frame(timestamp: number): void {
     if (event === 'scare' && state.scare) sound.scare(state.scare.kind, spooky());
     if (event === 'collect' || event === 'hit') updateHud();
     if (event === 'clear') {
+      const starsBefore = totalStars(progress.current);
       newBestStars = progress.recordClear(state.eraIndex, state.lastStars);
+      freshLooks = newlyUnlocked(starsBefore, totalStars(progress.current)).map(o => o.name);
       if (state.lastStars === 3) {
         sound.play('fanfare');
         celebrate(reducedMotion());

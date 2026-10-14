@@ -140,6 +140,13 @@ button:active { transform: translateY(2px); box-shadow: 0 2px 0 #819b47; }
 .scare-settings label { display: grid; grid-template-columns: auto auto 1fr; gap: 4px 8px; align-items: baseline; padding: 8px 10px; border: 1px solid var(--line); border-radius: 3px; font-size: 13px; cursor: pointer; }
 .scare-settings label span { grid-column: 2 / 4; color: #f6efd9b8; font-size: 12px; }
 .scare-settings input { accent-color: var(--lime); }
+.look-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin: 0 0 16px; padding: 0; list-style: none; }
+.look-card { display: grid; justify-items: center; gap: 4px; width: 100%; min-height: 0; padding: 6px 4px 8px; border: 1px solid #fff5; color: var(--paper); background: #fff1; box-shadow: none; font-size: 10px; letter-spacing: 0; text-transform: none; line-height: 1.2; }
+.look-card canvas { width: 56px; height: 76px; }
+.look-card[aria-pressed="true"] { border: 2px solid var(--lime); background: #c6f36b26; }
+.look-card:disabled { opacity: .5; cursor: not-allowed; }
+.look-card:disabled:hover { filter: none; transform: none; }
+.look-need { color: #ffd84d; }
 .board-note { margin: -6px 0 16px; color: #f6efd9b8; font-size: 11px; line-height: 1.4; }
 .mobile-controls { display: none; position: absolute; z-index: 2; inset: auto 16px 14px; justify-content: space-between; pointer-events: none; }
 .mobile-group { display: flex; gap: 9px; }
@@ -187,6 +194,9 @@ button:active { transform: translateY(2px); box-shadow: 0 2px 0 #819b47; }
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
   #hearts.pulse { animation: none; }
 }
+@media (max-width: 520px) {
+  .look-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
 /* Short landscape screens: the 16:9 game area is too short for menus, so they use the whole viewport
    with compact type, keeping the main buttons above the fold. */
 @media (max-height: 500px) {
@@ -200,6 +210,7 @@ button:active { transform: translateY(2px); box-shadow: 0 2px 0 #819b47; }
   .name-pick { margin-bottom: 6px; }
   .board { max-height: 30vh; margin-bottom: 10px; }
   .era-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-bottom: 10px; }
+  .look-card canvas { width: 42px; height: 57px; }
   .era-card { min-height: 36px; padding: 4px 8px; }
   .star-row { font-size: 22px; }
   .board-row { padding: 4px; }

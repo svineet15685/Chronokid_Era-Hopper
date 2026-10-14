@@ -29,9 +29,19 @@
             <button id="action">Play Game</button>
             <button class="secondary" id="restart" hidden>Play Again</button>
             <button class="secondary" id="eras-open" type="button">🗺️ Eras</button>
+            <button class="secondary" id="looks-open" type="button">👕 Looks</button>
             <button class="secondary" id="leaderboard-open" type="button">🏆 Leaderboard</button>
           </div>
           <button class="link-button" id="grownups-open" type="button">⚙ Grown-ups</button>
+        </div>
+      </section>
+      <section class="overlay board-overlay hidden" id="looks" role="dialog" aria-modal="true" aria-labelledby="looks-title">
+        <div class="panel">
+          <div class="eyebrow">Dress up Chronokid</div>
+          <h1 id="looks-title">Ward<br /><em>robe</em></h1>
+          <p class="board-note" id="looks-note"></p>
+          <ol class="look-grid" id="looks-grid"></ol>
+          <button id="looks-close" type="button">Done</button>
         </div>
       </section>
       <section class="overlay board-overlay hidden" id="grownups" role="dialog" aria-modal="true" aria-labelledby="grownups-title">

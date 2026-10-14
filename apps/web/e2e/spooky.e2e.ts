@@ -85,6 +85,7 @@ test('spooky mode darkens the level and opens scares with a blackout', async ({ 
 });
 
 test('grown-ups dialog passes accessibility checks', async ({ page }) => {
+  test.slow(); // two full accessibility scans
   await page.locator('#grownups-open').click();
   await page.waitForTimeout(500);
   const gate = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();

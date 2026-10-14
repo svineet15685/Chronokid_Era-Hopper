@@ -1,6 +1,7 @@
 // Canvas drawing. Stone, Medieval, and Future art is ported unchanged from the prototype.
 // Jump scare creatures are drawn full screen by scares.ts; the game view only shakes.
 import { CHECKPOINT_X, ERAS, FLOOR, H, W, WORLD_END, type Era } from './config';
+import { drawHero, type OutfitId } from './hero';
 import { DOUBLE_JUMP_TIME, FREEZE_TIME, MAGNET_TIME, PARTICLE_LIFE, POPUP_LIFE, POWER_UP_SIZE, type GameState, type Hazard, type Platform, type PowerKind } from './simulation';
 
 const POWER_COLORS: Record<PowerKind, string> = { shield: '#6fd3ff', freeze: '#b8f1ff', magnet: '#ff6f7d', doubleJump: '#ffd84d' };
@@ -16,6 +17,8 @@ export interface RenderOptions {
   reducedMotion?: () => boolean;
   /** Spooky mode: darkness with a glow around the hero, fog, and eyes watching from the background. */
   spooky?: () => boolean;
+  /** The outfit Chronokid is wearing. */
+  outfit?: () => OutfitId;
 }
 
 export function createRenderer(ctx: CanvasRenderingContext2D, options: RenderOptions = {}): (state: GameState, time?: number) => void {
@@ -451,15 +454,7 @@ export function createRenderer(ctx: CanvasRenderingContext2D, options: RenderOpt
     const armsUp = dancing && Math.floor(time / 0.15) % 2 === 0;
     ctx.save();
     if (facing < 0) { ctx.translate(x + player.w, 0); ctx.scale(-1, 1); } else ctx.translate(x, 0);
-    // Tiny time-traveler silhouette, intentionally built from crisp canvas blocks.
-    rect(7, y + 1, 20, 17, '#f2c36b');
-    rect(11, y + 5, 3, 3, '#172d36'); rect(22, y + 5, 3, 3, '#172d36');
-    rect(9, y + 18, 19, 16, '#2e9a91');
-    if (armsUp) { rect(3, y + 8, 6, 12, '#eaa959'); rect(28, y + 8, 6, 12, '#eaa959'); }
-    else { rect(3, y + 19, 8, 6, '#eaa959'); rect(27, y + 20, 7, 6, '#eaa959'); }
-    rect(10, y + 33, 7, 10, '#e8b85e'); rect(21, y + 33, 7, 10, '#e8b85e');
-    rect(8, y + 41, 10, 3, '#30404b'); rect(20, y + 41, 11, 3, '#30404b');
-    rect(9, y - 2, 18, 4, '#415b64'); rect(13, y - 6, 11, 4, '#5fe2cb');
+    drawHero(ctx, y, { outfit: options.outfit?.() ?? 'classic', armsUp });
     ctx.restore();
   }
 

@@ -1,4 +1,5 @@
-// Grown-up settings and the simple gate in front of them. Stored per device; never sent anywhere.
+// Grown-up settings and the simple gate in front of them, plus the chosen outfit. Stored per device; never sent anywhere.
+import { isOutfitId, type OutfitId } from './game/hero';
 
 /** How jump scares look. Chosen by a grown-up; the kid's 👻 toggle only turns them on and off. */
 export type ScareStyle = 'off' | 'silly' | 'spooky';
@@ -18,6 +19,26 @@ export function loadScareStyle(): ScareStyle {
 export function saveScareStyle(style: ScareStyle): void {
   try {
     localStorage.setItem(STYLE_KEY, style);
+  } catch {
+    /* not persisted */
+  }
+}
+
+const OUTFIT_KEY = 'chronokid.outfit';
+
+/** The chosen outfit, or Classic when nothing (or something unknown) is stored. */
+export function loadOutfit(): OutfitId {
+  try {
+    const value = localStorage.getItem(OUTFIT_KEY);
+    return isOutfitId(value) ? value : 'classic';
+  } catch {
+    return 'classic';
+  }
+}
+
+export function saveOutfit(outfit: OutfitId): void {
+  try {
+    localStorage.setItem(OUTFIT_KEY, outfit);
   } catch {
     /* not persisted */
   }
