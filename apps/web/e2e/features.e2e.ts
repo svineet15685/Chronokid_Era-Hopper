@@ -124,3 +124,20 @@ test('bonking the secret block opens a portal to a bonus room, and the era map r
   await expect(page.locator('.era-card').nth(0)).toHaveAttribute('aria-label', 'Era 1, STONE AGE, 0 of 3 stars, secret room found');
   await expect(page.locator('.era-card').nth(0)).toContainText('🔍');
 });
+
+test('finishing an era earns stickers, shown in a banner and kept in the sticker book', async ({ page }, testInfo) => {
+  await startGame(page, isTouch(testInfo.project.name));
+  await clearEra(page, 25, 0);
+  // Five stickers queue up one after another; which one is showing depends on timing.
+  await expect(page.locator('#sticker-toast')).toContainText('New sticker!');
+
+  await page.reload();
+  await page.locator('#stickers-open').click();
+  await expect(page.locator('#stickers-note')).toHaveText('You have 5 of 18 stickers. Every sticker shows how to earn it.');
+  await expect(page.locator('.sticker:not(.sticker-locked)')).toHaveCount(5);
+  await expect(page.getByLabel('Berry Picker: earned. Collect every berry in the Stone Age.')).toBeVisible();
+  await expect(page.getByLabel(/^Kraken Tamer: not yet\./)).toBeAttached();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#stickers')).toHaveClass(/hidden/);
+  await expect(page.locator('#stickers-open')).toBeFocused();
+});

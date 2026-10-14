@@ -164,6 +164,19 @@ button:active { transform: translateY(2px); box-shadow: 0 2px 0 #819b47; }
 .look-card:disabled { opacity: .5; cursor: not-allowed; }
 .look-card:disabled:hover { filter: none; transform: none; }
 .look-need { color: #ffd84d; }
+/* Sticker book: earned stickers in colour; the rest greyed out, with their goal so kids know what to try. */
+.sticker-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; max-height: min(52vh, 420px); margin: 0 0 16px; padding: 0; overflow-y: auto; list-style: none; touch-action: pan-y; }
+.sticker { display: grid; justify-items: center; align-content: start; gap: 2px; padding: 8px 6px; border: 1px solid #ffd84d88; border-radius: 6px; background: #ffd84d1f; font-size: 11px; line-height: 1.25; text-align: center; }
+.sticker-emoji { font-size: 30px; line-height: 1.2; }
+.sticker-goal { color: #f6efd9b8; font-size: 10px; }
+.sticker-locked { border-color: #fff3; background: #fff1; }
+.sticker-locked .sticker-emoji { filter: grayscale(1); opacity: .35; }
+.sticker-locked strong { color: #f6efd9b8; }
+/* New-sticker banner: top centre, over the game and menus but under jump scares; never takes clicks. */
+.sticker-toast { position: fixed; z-index: 8; top: calc(64px + env(safe-area-inset-top)); left: 50%; padding: 8px 16px; border: 2px solid #ffd84d; border-radius: 999px; color: var(--ink); background: #fff3b0; font-weight: 900; font-size: 15px; white-space: nowrap; transform: translateX(-50%); pointer-events: none; box-shadow: 0 4px 0 #7a5a00; }
+.sticker-toast:empty { display: none; }
+.sticker-toast.pop { animation: sticker-pop .35s both; }
+@keyframes sticker-pop { from { opacity: 0; transform: translate(-50%, -12px) scale(.8); } to { opacity: 1; transform: translate(-50%, 0) scale(1); } }
 .board-note { margin: -6px 0 16px; color: #f6efd9b8; font-size: 11px; line-height: 1.4; }
 .mobile-controls { display: none; position: absolute; z-index: 2; inset: auto 16px 14px; justify-content: space-between; pointer-events: none; }
 .mobile-group { display: flex; gap: 9px; }
@@ -229,6 +242,8 @@ button:active { transform: translateY(2px); box-shadow: 0 2px 0 #819b47; }
   .name-pick { margin-bottom: 6px; }
   .board { max-height: 30vh; margin-bottom: 10px; }
   .era-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-bottom: 10px; }
+  .sticker-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); max-height: 46vh; margin-bottom: 10px; }
+  .sticker-emoji { font-size: 22px; }
   .look-card canvas { width: 42px; height: 57px; }
   .era-card { min-height: 36px; padding: 4px 8px; }
   .star-row { font-size: 22px; }

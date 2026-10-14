@@ -55,6 +55,12 @@ test.describe('accessibility', () => {
     await expectNoViolations(page);
   });
 
+  test('sticker book screen', async ({ page }) => {
+    await page.locator('#stickers-open').click();
+    await expect(page.locator('.sticker')).toHaveCount(18);
+    await expectNoViolations(page);
+  });
+
   test('leaderboard screen', async ({ page }) => {
     await page.locator('#leaderboard-open').click();
     await expect(page.locator('.board-row')).toHaveCount(1);

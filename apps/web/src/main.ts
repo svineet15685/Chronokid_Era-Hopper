@@ -10,9 +10,11 @@ import { STAR_PICKUPS, advanceEra, beginGame, createGame, frameDelta, requestJum
 import { OnlineSession } from './online/session';
 import { ProgressTracker, totalStars } from './progress';
 import { OUTFITS, drawHero, newlyUnlocked, outfitUnlocked, type OutfitId } from './game/hero';
+import { StickerBook, type StickerDef } from './stickers';
 import { celebrate } from './ui/celebrate';
 import { INTRO_CAPTIONS, drawIntroPanel, introSeen, markIntroSeen } from './ui/intro';
 import { loadDifficulty, loadOutfit, loadScareStyle, makeGateQuestion, saveDifficulty, saveOutfit, saveScareStyle, type ScareStyle } from './settings';
+import { createStickerToast, renderStickerBook } from './ui/stickers';
 import { renderFinishResult, renderJoinPrompt, renderLeaderboard, renderNote } from './ui/online-panel';
 
 function byId<T extends HTMLElement>(id: string): T {
@@ -78,6 +80,11 @@ const looksOverlay = byId('looks');
 const looksGrid = byId('looks-grid');
 const looksNote = byId('looks-note');
 const looksClose = byId<HTMLButtonElement>('looks-close');
+const stickersButton = byId<HTMLButtonElement>('stickers-open');
+const stickersOverlay = byId('stickers');
+const stickersGrid = byId('stickers-grid');
+const stickersNote = byId('stickers-note');
+const stickersClose = byId<HTMLButtonElement>('stickers-close');
 const grownupsOverlay = byId('grownups');
 const gateEl = byId('gate');
 const gateQuestion = byId('gate-question');
@@ -95,6 +102,14 @@ let scareStyle: ScareStyle = loadScareStyle();
 let scaresOn = prefs.get('scares', true);
 const spooky = () => scareStyle === 'spooky' && state.scaresEnabled;
 const progress = new ProgressTracker();
+const stickers = new StickerBook();
+const toastStickers = createStickerToast(byId('sticker-toast'));
+/** Announces newly earned stickers with a chime and a banner. */
+function announceStickers(earned: StickerDef[]): void {
+  if (!earned.length) return;
+  sound.play('star');
+  toastStickers(earned);
+}
 let chosenOutfit: OutfitId = loadOutfit();
 /** The chosen outfit if its stars are earned; otherwise Classic (for example after progress was cleared). */
 const outfit = (): OutfitId => {
@@ -140,6 +155,7 @@ function showOverlay(): void {
   leaderboardButton.hidden = state.phase === 'clear';
   erasButton.hidden = state.phase === 'clear';
   looksButton.hidden = state.phase === 'clear';
+  stickersButton.hidden = state.phase === 'clear';
   difficultyEl.hidden = state.phase !== 'start';
   menuLinks.hidden = state.phase !== 'start';
   starsEl.hidden = state.phase !== 'clear';
@@ -234,6 +250,7 @@ function advance(): void {
   progress.reach(state.eraIndex);
   updateHud();
   if (state.phase === 'victory') {
+    announceStickers([stickers.award('time-champion')].filter(s => s !== null));
     showOverlay();
     sound.play('fanfare');
     celebrate(reducedMotion());
@@ -375,6 +392,7 @@ function renderLooks(): void {
     }
     card.addEventListener('click', () => {
       chosenOutfit = look.id;
+      if (look.id !== 'classic') announceStickers([stickers.award('dress-up')].filter(s => s !== null));
       saveOutfit(look.id);
       renderLooks();
       looksGrid.querySelector<HTMLButtonElement>('[aria-pressed="true"]')?.focus({ preventScroll: true });
@@ -388,6 +406,17 @@ function openLooks(): void {
   renderLooks();
   looksOverlay.classList.remove('hidden');
   looksGrid.querySelector<HTMLButtonElement>('[aria-pressed="true"]')?.focus({ preventScroll: true });
+}
+
+function openStickers(): void {
+  renderStickerBook(stickersGrid, stickersNote, stickers);
+  stickersOverlay.classList.remove('hidden');
+  stickersClose.focus({ preventScroll: true });
+}
+
+function closeStickers(): void {
+  stickersOverlay.classList.add('hidden');
+  stickersButton.focus({ preventScroll: true });
 }
 
 function closeLooks(): void {
@@ -457,6 +486,8 @@ introNext.addEventListener('click', nextIntroPage);
 introSkip.addEventListener('click', closeIntro);
 looksButton.addEventListener('click', openLooks);
 looksClose.addEventListener('click', closeLooks);
+stickersButton.addEventListener('click', openStickers);
+stickersClose.addEventListener('click', closeStickers);
 mapClose.addEventListener('click', () => closeMap());
 boardClose.addEventListener('click', closeBoard);
 window.addEventListener('keydown', event => {
@@ -464,6 +495,7 @@ window.addEventListener('keydown', event => {
   if (event.key === 'Escape' && !mapOverlay.classList.contains('hidden')) closeMap();
   if (event.key === 'Escape' && !grownupsOverlay.classList.contains('hidden')) closeGrownups();
   if (event.key === 'Escape' && !looksOverlay.classList.contains('hidden')) closeLooks();
+  if (event.key === 'Escape' && !stickersOverlay.classList.contains('hidden')) closeStickers();
   if (!introOverlay.classList.contains('hidden')) {
     if (event.key === 'Escape') closeIntro();
     if (event.key === 'ArrowRight') nextIntroPage();
@@ -590,7 +622,7 @@ scareSettings.addEventListener('change', event => {
 const keys = bindInput(document, {
   onJump: () => requestJump(state),
   onEnter: () => {
-    const menuOpen = [boardOverlay, mapOverlay, grownupsOverlay, looksOverlay, introOverlay].some(menu => !menu.classList.contains('hidden'));
+    const menuOpen = [boardOverlay, mapOverlay, grownupsOverlay, looksOverlay, stickersOverlay, introOverlay].some(menu => !menu.classList.contains('hidden'));
     if (state.phase === 'start' && !menuOpen) start();
   }
 });
@@ -644,6 +676,8 @@ function frame(timestamp: number): void {
     }
     if (event === 'clear' || event === 'gameover') showOverlay();
     if (event === 'gameover') void submitRun('gameover');
+    // After progress has recorded clears and secrets, so the sticker totals are current.
+    announceStickers(stickers.onEvent(event, state, progress.current));
   }
   spookySounds(timestamp / 1000);
   music.update(musicOn && state.phase === 'playing' && !state.scare && !document.hidden, currentTune());
