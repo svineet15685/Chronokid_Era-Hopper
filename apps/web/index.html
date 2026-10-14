@@ -39,7 +39,21 @@
             <button class="secondary" id="looks-open" type="button">👕 Looks</button>
             <button class="secondary" id="leaderboard-open" type="button">🏆 Leaderboard</button>
           </div>
-          <button class="link-button" id="grownups-open" type="button">⚙ Grown-ups</button>
+          <div class="menu-links">
+            <button class="link-button" id="story-open" type="button">📖 Story</button>
+            <button class="link-button" id="grownups-open" type="button">⚙ Grown-ups</button>
+          </div>
+        </div>
+      </section>
+      <section class="overlay board-overlay hidden" id="intro" role="dialog" aria-modal="true" aria-label="Story">
+        <div class="panel intro-panel">
+          <canvas class="intro-art" id="intro-art" width="480" height="270" aria-hidden="true"></canvas>
+          <p class="intro-caption" id="intro-caption" aria-live="polite"></p>
+          <p class="intro-dots" id="intro-dots" aria-hidden="true"></p>
+          <div class="menu-actions">
+            <button id="intro-next" type="button">Next</button>
+            <button class="secondary" id="intro-skip" type="button">Skip</button>
+          </div>
         </div>
       </section>
       <section class="overlay board-overlay hidden" id="looks" role="dialog" aria-modal="true" aria-labelledby="looks-title">

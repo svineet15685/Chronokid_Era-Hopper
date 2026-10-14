@@ -22,7 +22,7 @@ export const playerX = (page: Page) => page.evaluate(() => window.__chronokid.st
 
 /** Keeps putting the player on the first hazard until the last life is gone. */
 export async function loseLastLife(page: Page): Promise<void> {
-  await page.evaluate(() => { const { state } = window.__chronokid; state.lives = 1; state.player.invulnerable = 0; });
+  await page.evaluate(() => { const { state } = window.__chronokid; state.lives = 1; state.player.invulnerable = 0; /* a picked-up shield would absorb the hit */ state.effects.shield = false; });
   await expect.poll(async () => {
     await page.evaluate(() => { const { state } = window.__chronokid; state.player.x = state.hazards[0].x; });
     return page.locator('#title').textContent();

@@ -1,4 +1,4 @@
-// Per-device progress: which eras the player has reached and their best star rating in each.
+// Per-device progress: which eras the player has reached, their best star rating in each, and secrets found.
 // Used by the era map; never sent to the server.
 import { ERAS } from './game/config';
 
@@ -9,6 +9,8 @@ export interface Progress {
   reached: number;
   /** Best stars per era (0 = not yet cleared). */
   stars: number[];
+  /** Whether the era's secret room has been found. */
+  secrets: boolean[];
 }
 
 /** Sum of the best stars across all eras (0 to 30); unlocks outfits. */
@@ -19,15 +21,16 @@ export interface ProgressStore {
   save(progress: Progress): void;
 }
 
-const empty = (): Progress => ({ reached: 0, stars: ERAS.map(() => 0) });
+const empty = (): Progress => ({ reached: 0, stars: ERAS.map(() => 0), secrets: ERAS.map(() => false) });
 
 /** Accepts only well-formed saved data; anything else starts fresh. */
 export function sanitizeProgress(value: unknown): Progress {
   const fresh = empty();
   if (typeof value !== 'object' || value === null) return fresh;
-  const { reached, stars } = value as Partial<Progress>;
+  const { reached, stars, secrets } = value as Partial<Progress>;
   if (Number.isInteger(reached)) fresh.reached = Math.min(Math.max(reached as number, 0), ERAS.length - 1);
   if (Array.isArray(stars)) fresh.stars = fresh.stars.map((_, i) => (Number.isInteger(stars[i]) ? Math.min(Math.max(stars[i], 0), 3) : 0));
+  if (Array.isArray(secrets)) fresh.secrets = fresh.secrets.map((_, i) => secrets[i] === true);
   return fresh;
 }
 
@@ -76,8 +79,16 @@ export class ProgressTracker {
     const improved = stars > best;
     const reached = Math.min(Math.max(this.progress.reached, eraIndex + 1), ERAS.length - 1);
     if (!improved && reached === this.progress.reached) return false;
-    this.progress = { reached, stars: this.progress.stars.map((s, i) => (i === eraIndex ? Math.max(s, stars) : s)) };
+    this.progress = { ...this.progress, reached, stars: this.progress.stars.map((s, i) => (i === eraIndex ? Math.max(s, stars) : s)) };
     this.store.save(this.progress);
     return improved;
+  }
+
+  /** Records finding an era's secret room; returns true the first time. */
+  recordSecret(eraIndex: number): boolean {
+    if (eraIndex < 0 || eraIndex >= ERAS.length || this.progress.secrets[eraIndex]) return false;
+    this.progress = { ...this.progress, secrets: this.progress.secrets.map((found, i) => found || i === eraIndex) };
+    this.store.save(this.progress);
+    return true;
   }
 }

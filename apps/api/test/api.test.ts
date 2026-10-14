@@ -167,7 +167,7 @@ describe.skipIf(!dbTestsEnabled)('API with PostgreSQL', () => {
     });
 
     it.each([
-      ['more points than the era holds', { score: 2600, eraReached: 1, outcome: 'gameover' }, 60_000, 400],
+      ['more points than the era holds', { score: 3100, eraReached: 1, outcome: 'gameover' }, 60_000, 400],
       ['a score that is not a multiple of 100', { score: 150, eraReached: 1, outcome: 'gameover' }, 60_000, 400],
       ['a victory before the last era', { score: 5000, eraReached: 9, outcome: 'victory' }, 600_000, 400],
       ['a run faster than the eras allow', { score: 1000, eraReached: 5, outcome: 'gameover' }, 4 * MIN_ERA_MS - 1, 400],

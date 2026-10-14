@@ -14,8 +14,13 @@ export interface ApiReadiness {
 export const GAME_RULES = {
   eraCount: 10,
   pickupsPerEra: 25,
-  pickupPoints: 100
+  pickupPoints: 100,
+  /** Bonus gems in each era's secret room. */
+  secretPickups: 5
 } as const;
+
+/** The most points a run can hold after reaching `eras` eras: every pickup plus every secret room. */
+export const maxScoreForEras = (eras: number) => eras * (GAME_RULES.pickupsPerEra + GAME_RULES.secretPickups) * GAME_RULES.pickupPoints;
 
 export const DISPLAY_NAME_MAX = 24;
 

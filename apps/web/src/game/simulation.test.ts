@@ -1,10 +1,11 @@
 import { GAME_RULES } from '@chronokid/shared';
 import { describe, expect, it } from 'vitest';
-import { CHECKPOINT_X, DIFFICULTIES, ERAS, FLOOR, H, HAZARD_XS, SKINS, START_X, WORLD_END, type EraId } from './config';
+import { CHECKPOINT_X, DIFFICULTIES, ERAS, LEDGES, FLOOR, H, HAZARD_XS, SKINS, START_X, WORLD_END, type EraId } from './config';
+import { BOSS_ARENA_X, BOSS_DEFS, BOSS_TIMES, headBox } from './boss';
 import { CHECKPOINT_SAFE, FINISH_SAFE, START_SAFE, levelLayout } from './level';
 import {
   COMBO_WINDOW, CRUMBLE_TIME, DOUBLE_JUMP_TIME, FREEZE_TIME, MAGNET_TIME, SCARE_TIME, STAR_PICKUPS, advanceEra, beginGame, buildLevel, createGame,
-  frameDelta, groundAt, requestJump, retryEra, starsFor, step, type PowerKind,
+  ROOM_EXIT_X, SECRET_LEDGE, frameDelta, groundAt, requestJump, retryEra, secretPortalBox, starsFor, step, type PowerKind,
   type GameEvent, type GameState
 } from './simulation';
 
@@ -37,6 +38,7 @@ function playing(id: EraId = 'stone'): GameState {
 function clearArea(state: GameState): GameState {
   state.hazards = [];
   state.pickups = [];
+  if (state.boss) state.boss.hp = 0; // lets tests walk to the finish flag
   return state;
 }
 
@@ -60,12 +62,14 @@ describe('eras', () => {
     expect(ERAS.at(-1)?.pits).toBeGreaterThanOrEqual(5);
   });
 
-  it('keeps the first era identical to the original prototype', () => {
+  it('keeps the first era as the original prototype, apart from the boss arena', () => {
     const stone = ERAS[0];
     expect(stone).toMatchObject({ name: 'STONE AGE', gravity: 1900, speed: 245, jump: 650, tempo: 1, pits: 0 });
     const state = createGame();
     expect(state.platforms.filter(p => p.kind === 'ground')).toEqual([expect.objectContaining({ x: 0, w: WORLD_END })]);
-    expect(state.hazards.map(h => [h.skin, h.x])).toEqual(HAZARD_XS.map(x => ['boulder', x]));
+    // The original boulders up to the T-rex arena; the arena itself is kept clear.
+    expect(state.hazards.map(h => [h.skin, h.x])).toEqual(HAZARD_XS.filter(x => x < BOSS_ARENA_X - 160).map(x => ['boulder', x]));
+    expect(state.boss).toMatchObject({ kind: 'trex', hp: 3, phase: 'waiting' });
     expect(state.pickups).toHaveLength(25);
   });
 });
@@ -602,6 +606,283 @@ describe('combos', () => {
     expect(state.combo.count).toBe(0);
     expect(collectNext(state)).not.toContain('combo');
     expect(state.combo.count).toBe(1);
+  });
+});
+
+describe('secret rooms', () => {
+  /** A game in the given era with the player standing on the ledge under the secret block. */
+  function underSecret(eraIndexValue: number): GameState {
+    const state = createGame();
+    state.scaresEnabled = false;
+    beginGame(state, eraIndexValue);
+    run(state, idle, 5);
+    state.hazards = [];
+    const secret = state.secret;
+    if (!secret) throw new Error('no secret');
+    state.player.x = secret.x;
+    state.player.y = LEDGES[SECRET_LEDGE][1] - state.player.h;
+    state.player.vy = 0;
+    run(state, idle, 2);
+    return state;
+  }
+
+  it('hides one secret in every era, in a safe spot', () => {
+    ERAS.forEach((era, i) => {
+      const state = createGame();
+      buildLevel(state, i);
+      const secret = state.secret;
+      expect(secret).not.toBeNull();
+      if (!secret) return;
+      const ledge = state.platforms.find(p => p.kind === 'ledge' && p.x === LEDGES[SECRET_LEDGE][0]);
+      expect(ledge?.crumble).toBe(false);
+      expect(secret.x).toBeGreaterThan(LEDGES[SECRET_LEDGE][0]);
+      expect(secret.x + secret.w).toBeLessThan(LEDGES[SECRET_LEDGE][0] + LEDGES[SECRET_LEDGE][2]);
+      expect(secret.x).toBeLessThan(BOSS_ARENA_X - 200);
+      // Low enough that this era's jump from the ledge reaches it.
+      const apex = (era.jump * era.jump) / (2 * era.gravity);
+      expect(LEDGES[SECRET_LEDGE][1] - 44 - apex).toBeLessThan(secret.y + secret.h);
+    });
+  });
+
+  it('breaks only when bonked from below, then opens a portal', () => {
+    const state = underSecret(0);
+    const secret = state.secret;
+    if (!secret) throw new Error('no secret');
+    state.player.y = secret.y - state.player.h - 2;
+    state.player.vy = 200;
+    run(state, idle, 3);
+    expect(secret.state).toBe('hidden');
+    state.player.y = LEDGES[SECRET_LEDGE][1] - state.player.h;
+    state.player.vy = 0;
+    run(state, idle, 2);
+    requestJump(state);
+    const events = run(state, idle, 30);
+    expect(events).toContain('secretBreak');
+    expect(secret.state).toBe('portal');
+    run(state, idle, 60);
+    expect(secret.state).toBe('used');
+    expect(state.room).not.toBeNull();
+  });
+
+  it('leads into a safe bonus room and back out to the same spot', () => {
+    const state = underSecret(2);
+    const secret = state.secret;
+    if (!secret) throw new Error('no secret');
+    const levelPickups = state.pickups;
+    secret.state = 'portal';
+    const portal = secretPortalBox(secret);
+    state.player.x = portal.x + 5;
+    const lives = state.lives;
+    expect(step(state, idle, DT)).toContain('secretEnter');
+    expect(state.room).not.toBeNull();
+    expect(state.lives).toBe(lives + 1);
+    expect(state.hazards).toEqual([]);
+    expect(state.pickups.every(p => p.bonus)).toBe(true);
+    expect(state.cameraX).toBe(0);
+
+    // Gems score but do not count toward the pickup star.
+    const score = state.score;
+    for (const gem of state.pickups) {
+      state.player.x = gem.x - 10;
+      state.player.y = gem.y - 10;
+      step(state, idle, DT);
+    }
+    expect(state.score).toBe(score + 500);
+    expect(state.eraPickups).toBe(0);
+
+    state.player.x = ROOM_EXIT_X + 5;
+    state.player.y = FLOOR - state.player.h;
+    expect(step(state, idle, DT)).toContain('secretExit');
+    expect(state.room).toBeNull();
+    expect(state.pickups).toBe(levelPickups);
+    expect(state.player.x).toBeGreaterThan(secret.x);
+    expect(state.player.y).toBe(LEDGES[SECRET_LEDGE][1] - state.player.h);
+    expect(secret.state).toBe('used');
+  });
+
+  it('never clears the era or fires scares from inside the room', () => {
+    const state = underSecret(0);
+    const secret = state.secret;
+    if (!secret) throw new Error('no secret');
+    secret.state = 'portal';
+    state.player.x = secretPortalBox(secret).x + 5;
+    step(state, idle, DT);
+    state.scaresEnabled = true;
+    state.player.x = 900;
+    const events = run(state, right, 30);
+    expect(events).not.toContain('clear');
+    expect(events).not.toContain('scare');
+    expect(state.player.x + state.player.w).toBeLessThanOrEqual(960);
+  });
+
+  it('resets when the era is retried', () => {
+    const state = underSecret(0);
+    if (state.secret) state.secret.state = 'used';
+    state.phase = 'gameover';
+    retryEra(state);
+    expect(state.secret?.state).toBe('hidden');
+    expect(state.room).toBeNull();
+  });
+});
+
+describe('T-rex boss', () => {
+  /** A Stone Age game with the player standing at the arena entrance. */
+  function atArena(): GameState {
+    const state = playing();
+    state.hazards = [];
+    state.pickups = [];
+    state.player.x = BOSS_ARENA_X + 20;
+    return state;
+  }
+
+  /** Runs until the boss reaches a phase (or gives up), keeping the player safe meanwhile. */
+  function runUntil(state: GameState, phase: string, maxFrames = 600): void {
+    for (let i = 0; i < maxFrames && state.boss?.phase !== phase; i++) {
+      state.player.invulnerable = 5;
+      step(state, idle, DT);
+    }
+    if (state.boss?.phase !== phase) throw new Error(`boss never reached ${phase}`);
+  }
+
+  /** Drops the player onto the tired boss's head. */
+  function stomp(state: GameState): GameEvent[] {
+    if (!state.boss) throw new Error('no boss');
+    const head = headBox(state.boss);
+    state.player.x = head.x + 10;
+    state.player.y = head.y - state.player.h + 4;
+    state.player.vy = 200;
+    return step(state, idle, DT);
+  }
+
+  it('guards every era, with more hits needed later on', () => {
+    const kinds = ERAS.map((era, i) => {
+      const state = createGame();
+      buildLevel(state, i);
+      expect(state.boss).not.toBeNull();
+      expect(state.boss?.hp).toBe(BOSS_DEFS[state.boss?.kind ?? 'trex'].hp);
+      return state.boss?.kind;
+    });
+    expect(new Set(kinds).size).toBe(ERAS.length);
+    expect(BOSS_DEFS.trex.hp).toBe(3);
+    expect(BOSS_DEFS.timeeater.hp).toBe(5);
+  });
+
+  it.each(ERAS.map((era, i) => [era.boss, i] as const))('%s cycles through its attacks', (_kind, index) => {
+    const state = playing();
+    buildLevel(state, index);
+    state.hazards = [];
+    state.pickups = [];
+    state.player.x = BOSS_ARENA_X + 20;
+    const kind = state.boss?.kind ?? 'trex';
+    const seen: string[] = [];
+    for (let i = 0; i < BOSS_DEFS[kind].attacks.length; i++) {
+      runUntil(state, 'telegraph', 1200);
+      seen.push(state.boss?.attack ?? '');
+      runUntil(state, 'tired', 1200);
+    }
+    expect(seen).toEqual(BOSS_DEFS[kind].attacks);
+  });
+
+  it('fires volleys low, high, low: the high shot passes over a standing player', () => {
+    const state = playing('egypt');
+    state.hazards = [];
+    state.pickups = [];
+    state.player.x = BOSS_ARENA_X + 20;
+    runUntil(state, 'telegraph'); // the mummy opens with falling blocks
+    runUntil(state, 'tired', 1200);
+    runUntil(state, 'telegraph', 1200);
+    expect(state.boss?.attack).toBe('volley');
+    runUntil(state, 'recover');
+    const shots = state.boss?.shots ?? [];
+    expect(shots.map(s => s.delay > 0)).toEqual([false, true, true]);
+    const [low, high] = shots;
+    state.player.invulnerable = 0;
+    state.player.y = FLOOR - state.player.h;
+    high.delay = 0;
+    high.x = state.player.x;
+    low.x = state.player.x - 200; // out of the way for now (still in play)
+    expect(step(state, idle, DT)).not.toContain('hit');
+    low.x = state.player.x;
+    expect(step(state, idle, DT)).toContain('hit');
+  });
+
+  it('keeps the arena free of other hazards and pits', () => {
+    for (const era of ERAS.filter(e => e.boss)) {
+      const layout = levelLayout(era);
+      expect(layout.hazards.every(h => h.x < BOSS_ARENA_X - 160)).toBe(true);
+      expect(layout.pits.every(p => p.x + p.w < BOSS_ARENA_X - 160)).toBe(true);
+    }
+  });
+
+  it('wakes when the player enters the arena and blocks the finish until beaten', () => {
+    const state = playing();
+    state.hazards = [];
+    expect(state.boss?.phase).toBe('waiting');
+    state.player.x = BOSS_ARENA_X + 20;
+    expect(step(state, idle, DT)).toContain('bossRoar');
+    state.player.x = WORLD_END - 40;
+    const events = step(state, right, DT);
+    expect(events).not.toContain('clear');
+    expect(state.player.x + state.player.w).toBeLessThanOrEqual((state.boss?.x ?? 0) + 10);
+  });
+
+  it('stomps a shockwave along the ground that hurts unless jumped', () => {
+    const state = atArena();
+    runUntil(state, 'telegraph');
+    expect(state.boss?.attack).toBe('stomp');
+    runUntil(state, 'recover');
+    expect(state.boss?.shockwaves).toHaveLength(1);
+    state.player.invulnerable = 0;
+    const wave = state.boss?.shockwaves[0];
+    if (!wave) throw new Error('no shockwave');
+    wave.x = state.player.x;
+    expect(step(state, idle, DT)).toContain('hit');
+  });
+
+  it('drops rocks where the warning shadows were', () => {
+    const state = atArena();
+    runUntil(state, 'tired');
+    runUntil(state, 'telegraph');
+    expect(state.boss?.attack).toBe('rain');
+    const targets = [...(state.boss?.rockTargets ?? [])];
+    expect(targets).toHaveLength(3);
+    for (const x of targets) expect(x).toBeGreaterThanOrEqual(BOSS_ARENA_X);
+    runUntil(state, 'recover');
+    expect(state.boss?.rocks.map(r => r.x + r.w / 2)).toEqual(targets);
+  });
+
+  it('takes three stomps on its tired head, then runs away and unlocks the finish', () => {
+    const state = atArena();
+    for (let hit = 1; hit <= 3; hit++) {
+      runUntil(state, 'tired');
+      const events = stomp(state);
+      expect(events).toContain('bossHit');
+      expect(state.player.vy).toBeLessThan(0);
+      expect(state.boss?.hp).toBe(3 - hit);
+    }
+    const events: GameEvent[] = [];
+    for (let i = 0; i < Math.ceil(BOSS_TIMES.hurt / DT) + 2; i++) events.push(...step(state, idle, DT));
+    expect(events).toContain('bossDefeated');
+    expect(state.boss?.phase).toBe('leaving');
+    state.player.x = WORLD_END - 62;
+    expect(step(state, right, DT)).toContain('clear');
+  });
+
+  it('cannot be stomped while it is standing', () => {
+    const state = atArena();
+    runUntil(state, 'intro', 200);
+    const events = stomp(state);
+    expect(events).not.toContain('bossHit');
+    expect(state.boss?.hp).toBe(3);
+  });
+
+  it('resets when the era is retried', () => {
+    const state = atArena();
+    runUntil(state, 'tired');
+    stomp(state);
+    state.phase = 'gameover';
+    retryEra(state);
+    expect(state.boss).toMatchObject({ hp: 3, phase: 'waiting' });
   });
 });
 

@@ -1,8 +1,10 @@
 // Canvas drawing. Stone, Medieval, and Future art is ported unchanged from the prototype.
 // Jump scare creatures are drawn full screen by scares.ts; the game view only shakes.
 import { CHECKPOINT_X, ERAS, FLOOR, H, W, WORLD_END, type Era } from './config';
+import { drawBossAttacks, drawBossCreature } from './boss-art';
+import { BOSS_DEFS, BOSS_TIMES } from './boss';
 import { drawHero, type OutfitId } from './hero';
-import { DOUBLE_JUMP_TIME, FREEZE_TIME, MAGNET_TIME, PARTICLE_LIFE, POPUP_LIFE, POWER_UP_SIZE, type GameState, type Hazard, type Platform, type PowerKind } from './simulation';
+import { DOUBLE_JUMP_TIME, FREEZE_TIME, MAGNET_TIME, PARTICLE_LIFE, POPUP_LIFE, PORTAL_OPEN_TIME, POWER_UP_SIZE, roomExitBox, secretPortalBox, type Box, type GameState, type Hazard, type Platform, type PowerKind } from './simulation';
 
 const POWER_COLORS: Record<PowerKind, string> = { shield: '#6fd3ff', freeze: '#b8f1ff', magnet: '#ff6f7d', doubleJump: '#ffd84d' };
 
@@ -408,6 +410,18 @@ export function createRenderer(ctx: CanvasRenderingContext2D, options: RenderOpt
       if (x < -30 || x > W + 30) continue;
       const y = pickup.y + Math.sin(elapsed * 4 + pickup.phase) * 5;
       ctx.save(); ctx.translate(x, y); ctx.rotate(Math.sin(elapsed * 3 + pickup.phase) * 0.12);
+      if (pickup.bonus) {
+        // Secret-room gems are big and golden, with a soft glow.
+        for (let i = 0; i < 3; i++) {
+          const a = elapsed * 2 + pickup.phase + (i * TAU) / 3;
+          ctx.globalAlpha = 0.5 + Math.sin(elapsed * 6 + i * 2) * 0.5;
+          circle(Math.cos(a) * 19, Math.sin(a) * 19, 2.5, '#fff6c8');
+        }
+        ctx.globalAlpha = 1;
+        poly('#ffc21a', 0, -15, 12, -3, 0, 15, -12, -3); poly('#fff3b0', 0, -15, 5, -3, 0, 5, -5, -3);
+        ctx.restore();
+        continue;
+      }
       switch (era.collectible) {
         case 'berry':
           ctx.fillStyle = '#ed7661'; ctx.beginPath(); ctx.arc(-4, 1, 7, 0, TAU); ctx.arc(4, 1, 7, 0, TAU); ctx.fill();
@@ -542,11 +556,122 @@ export function createRenderer(ctx: CanvasRenderingContext2D, options: RenderOpt
     });
   }
 
+  /** A swirling time portal standing in the given box (screen x). */
+  function drawPortal(box: Box, screenX: number, time: number, open: number): void {
+    const cx = screenX + box.w / 2;
+    const cy = box.y + box.h / 2;
+    const rx = (box.w / 2) * open;
+    const ry = (box.h / 2) * open;
+    if (rx < 1) return;
+    ctx.save();
+    ctx.globalAlpha = 0.35; ctx.fillStyle = '#c9a0ff'; ctx.beginPath(); ctx.ellipse(cx, cy, rx + 8, ry + 8, 0, 0, TAU); ctx.fill();
+    ctx.globalAlpha = 1;
+    const colors = ['#5b2bd1', '#8a5cff', '#c9a0ff', '#fff3b0'];
+    for (let i = 0; i < colors.length; i++) {
+      const k = 1 - i * 0.22;
+      ctx.fillStyle = colors[i]; ctx.beginPath(); ctx.ellipse(cx, cy, rx * k, ry * k, 0, 0, TAU); ctx.fill();
+    }
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2;
+    for (let i = 0; i < 3; i++) {
+      const a = time * 4 + (i * TAU) / 3;
+      ctx.beginPath(); ctx.ellipse(cx, cy, rx * 0.7, ry * 0.7, 0, a, a + 1.4); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  /** The era's secret: a cracked, glowing "?" block, then the portal it opens. */
+  function drawSecret(state: GameState, time: number): void {
+    const { secret, cameraX } = state;
+    if (!secret || state.room) return;
+    const x = secret.x - cameraX;
+    if (x < -80 || x > W + 80) return;
+    if (secret.state === 'hidden') {
+      const glow = 0.25 + Math.sin(time * 3) * 0.12;
+      ctx.globalAlpha = glow; circle(x + secret.w / 2, secret.y + secret.h / 2, secret.w * 0.9, '#ffe680'); ctx.globalAlpha = 1;
+      rect(x, secret.y, secret.w, secret.h, '#8a6a3c');
+      rect(x + 3, secret.y + 3, secret.w - 6, secret.h - 6, '#b48a50');
+      ctx.strokeStyle = '#4a3418'; ctx.lineWidth = 2; ctx.beginPath();
+      ctx.moveTo(x + 4, secret.y + 6); ctx.lineTo(x + 11, secret.y + 13); ctx.lineTo(x + 8, secret.y + 20);
+      ctx.moveTo(x + secret.w - 5, secret.y + secret.h - 4); ctx.lineTo(x + secret.w - 11, secret.y + secret.h - 12);
+      ctx.stroke();
+      ctx.font = '900 20px "Trebuchet MS", "Segoe UI", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#fff3b0'; ctx.fillText('?', x + secret.w / 2 + 1, secret.y + secret.h / 2 + 1);
+      ctx.textBaseline = 'alphabetic';
+    } else if (secret.state === 'portal') {
+      const portal = secretPortalBox(secret);
+      drawPortal(portal, portal.x - cameraX, time, 1 - secret.opening / PORTAL_OPEN_TIME * 0.7);
+    }
+  }
+
+  /** The secret room: a starry night with a glowing exit portal. */
+  function drawRoom(time: number): void {
+    const gradient = ctx.createLinearGradient(0, 0, 0, H);
+    gradient.addColorStop(0, '#1a1146');
+    gradient.addColorStop(1, '#3d2a7a');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, W, H);
+    for (let i = 0; i < 40; i++) {
+      const sx = (i * 197) % W;
+      const sy = (i * 89) % (FLOOR - 40);
+      ctx.globalAlpha = 0.45 + Math.sin(time * 2 + i) * 0.35;
+      circle(sx, sy, i % 5 === 0 ? 2.5 : 1.5, '#fff6c8');
+    }
+    ctx.globalAlpha = 1;
+    ctx.font = '900 22px "Trebuchet MS", "Segoe UI", sans-serif'; ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffe680'; ctx.fillText('SECRET ROOM', W / 2, 60);
+    const exit = roomExitBox();
+    drawPortal(exit, exit.x, time, 1);
+    ctx.font = '900 14px "Trebuchet MS", "Segoe UI", sans-serif';
+    ctx.fillStyle = '#ffffff'; ctx.fillText('EXIT', exit.x + exit.w / 2, exit.y - 10);
+  }
+
   function drawFlags(state: GameState, era: Era): void {
     drawFlag(WORLD_END - state.cameraX, era.accent, 94);
     // Checkpoint flag sits low and grey until reached, then flies in the era colour.
     const reached = state.checkpointX >= CHECKPOINT_X;
     drawFlag(CHECKPOINT_X + 60 - state.cameraX, reached ? era.accent : '#8a9095', reached ? 94 : 40);
+  }
+
+  /** The era's boss and its attacks, with warning shadows for falling objects. */
+  function drawBoss(state: GameState, time: number): void {
+    const boss = state.boss;
+    if (!boss) return;
+    const { cameraX } = state;
+    const reduced = options.reducedMotion?.() ?? false;
+    if (boss.phase === 'telegraph' && boss.attack === 'rain') {
+      const progress = 1 - boss.timer / BOSS_TIMES.telegraph;
+      ctx.globalAlpha = 0.25 + progress * 0.45;
+      for (const target of boss.rockTargets) {
+        ctx.fillStyle = '#1a140c'; ctx.beginPath(); ctx.ellipse(target - cameraX, FLOOR + 2, 12 + progress * 14, 5, 0, 0, TAU); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+    drawBossAttacks(ctx, boss.kind, boss.shockwaves, boss.rocks, boss.shots, cameraX, time);
+    const x = boss.x - cameraX;
+    if (x > W + 60) return;
+    drawBossCreature(ctx, boss.kind, x, {
+      tired: boss.phase === 'tired',
+      roaring: boss.phase === 'intro' || boss.phase === 'telegraph',
+      rear: boss.phase === 'telegraph' && boss.attack === 'stomp' ? (1 - boss.timer / BOSS_TIMES.telegraph) * 22 : 0,
+      flash: boss.phase === 'hurt' && !reduced && Math.floor(time * 16) % 2 === 0,
+      bob: boss.phase === 'leaving' && !reduced ? Math.abs(Math.sin(time * 14)) * 6 : 0,
+      time: reduced ? 0 : time
+    }, reduced);
+  }
+
+  /** Boss name and remaining hits, top center while the fight is on. */
+  function drawBossBar(state: GameState): void {
+    const boss = state.boss;
+    if (!boss || boss.phase === 'waiting' || boss.phase === 'leaving') return;
+    const { name, hp } = BOSS_DEFS[boss.kind];
+    const width = 150 + hp * 34;
+    const x = (W - width) / 2;
+    ctx.fillStyle = '#10201fd9'; ctx.beginPath(); ctx.roundRect(x, 70, width, 34, 6); ctx.fill();
+    ctx.font = '900 14px "Trebuchet MS", sans-serif'; ctx.textAlign = 'left'; ctx.fillStyle = '#f6efd9';
+    ctx.fillText(name, x + 12, 92);
+    for (let i = 0; i < hp; i++) {
+      rect(x + 140 + i * 34, 80, 28, 14, i < boss.hp ? '#ff6f7d' : '#ffffff33');
+    }
   }
 
   /**
@@ -598,13 +723,16 @@ export function createRenderer(ctx: CanvasRenderingContext2D, options: RenderOpt
       const shake = 14 * Math.max(0, 1 - scare.t / 0.7);
       ctx.translate(Math.sin(scare.t * 97) * shake, Math.cos(scare.t * 83) * shake);
     }
-    drawBackground(era, state);
+    if (state.room) drawRoom(time);
+    else drawBackground(era, state);
     drawPlatforms(state, era);
-    drawFlags(state, era);
+    if (!state.room) drawFlags(state, era);
+    drawSecret(state, time);
     drawPickups(state, era);
     drawHazards(state);
     drawFreezeTint(state);
     drawPowerUps(state);
+    drawBoss(state, time);
     for (const p of state.particles) { ctx.globalAlpha = Math.max(0, p.life / PARTICLE_LIFE); rect(p.x - state.cameraX, p.y, 4, 4, p.color); }
     ctx.globalAlpha = 1;
     drawPlayer(state, time);
@@ -620,6 +748,7 @@ export function createRenderer(ctx: CanvasRenderingContext2D, options: RenderOpt
     }
     ctx.globalAlpha = 1;
     if (state.phase === 'playing') drawEffectBadges(state);
+    if (state.phase === 'playing') drawBossBar(state);
     if (state.phase === 'playing') {
       const progress = Math.min(1, state.player.x / WORLD_END);
       rect(0, H - 4, W * progress, 4, era.accent);

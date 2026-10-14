@@ -27,7 +27,12 @@ export default defineConfig({
   workers: process.env.CI ? 2 : undefined,
   // In CI: inline annotations, plus an HTML report the workflow uploads when tests fail.
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : 'list',
-  use: { baseURL, trace: 'retain-on-failure' },
+  use: {
+    baseURL,
+    trace: 'retain-on-failure',
+    // Tests start as returning visitors so the first-launch story does not cover the menus (intro.e2e.ts opts out).
+    storageState: { cookies: [], origins: [{ origin: baseURL, localStorage: [{ name: 'chronokid.introSeen', value: 'yes' }] }] }
+  },
   projects: [
     { name: 'desktop', use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 720 } } },
     // 375x667 portrait is where the prototype clipped its start button.

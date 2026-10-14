@@ -20,7 +20,7 @@ test('music plays through gameplay and era changes without errors', async ({ pag
   await page.goto('/');
   await startGame(page, isTouch(testInfo.project.name));
   await page.waitForTimeout(800);
-  await page.evaluate(() => { const { state } = window.__chronokid; state.player.invulnerable = 5; state.player.x = 3400; });
+  await page.evaluate(() => { const { state } = window.__chronokid; state.player.invulnerable = 5; /* the era boss blocks the flag; count it beaten */ if (state.boss) state.boss.hp = 0; state.player.x = 3400; });
   await page.getByRole('button', { name: 'Advance to Next Era' }).click();
   await page.evaluate(() => { window.__chronokid.state.lives = 1; });
   await page.waitForTimeout(800);
