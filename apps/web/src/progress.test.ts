@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ProgressTracker, sanitizeProgress, type Progress, type ProgressStore } from './progress';
+import { ProgressTracker, sanitizeProgress, totalStars, type Progress, type ProgressStore } from './progress';
 
 function memoryStore(initial?: Progress): ProgressStore & { saved: Progress | null } {
   return {
@@ -35,6 +35,10 @@ describe('progress', () => {
     expect(tracker.isUnlocked(4)).toBe(true);
     tracker.recordClear(9, 1);
     expect(tracker.current.reached).toBe(9);
+  });
+
+  it('totals the best stars across eras', () => {
+    expect(totalStars({ reached: 3, stars: [3, 2, 1, 0, 0, 0, 0, 0, 0, 0] })).toBe(6);
   });
 
   it('ignores corrupted or tampered saved data', () => {

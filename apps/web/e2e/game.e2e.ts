@@ -86,6 +86,7 @@ test('Enter starts the game from the start screen', async ({ page }, testInfo) =
 });
 
 test('progresses through all ten eras to victory', async ({ page }, testInfo) => {
+  test.slow(); // ten eras of menus and overlays; give busy machines time
   const touch = isTouch(testInfo.project.name);
   await page.locator('#scares').click(); // keep the run quick; scares have their own test
   await startGame(page, touch);

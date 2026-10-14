@@ -39,7 +39,8 @@ test('clearing an era shows its stars and what would earn more', async ({ page }
   await clearEra(page, 25, 0);
   await expect(page.locator('#star-row')).toHaveAttribute('aria-label', '3 of 3 stars');
   await expect(page.locator('#star-row .star-off')).toHaveCount(0);
-  await expect(page.locator('#star-hint')).toHaveText('New best! Perfect era!');
+  // 1 + 3 stars crosses the 3-star mark, so the first outfit unlocks too.
+  await expect(page.locator('#star-hint')).toHaveText('New best! Perfect era! New look unlocked: Caveman Bone Helmet! Try it in 👕 Looks.');
 });
 
 test('a perfect era gets confetti; a 2-star era does not', async ({ page }, testInfo) => {

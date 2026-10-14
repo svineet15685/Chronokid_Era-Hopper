@@ -11,6 +11,9 @@ export interface Progress {
   stars: number[];
 }
 
+/** Sum of the best stars across all eras (0 to 30); unlocks outfits. */
+export const totalStars = (progress: Readonly<Progress>) => progress.stars.reduce((sum, stars) => sum + stars, 0);
+
 export interface ProgressStore {
   load(): Progress;
   save(progress: Progress): void;
