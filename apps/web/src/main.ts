@@ -8,6 +8,7 @@ import { createScareLayer } from './game/scares';
 import { STAR_PICKUPS, advanceEra, beginGame, createGame, frameDelta, requestJump, retryEra, step, type GameState } from './game/simulation';
 import { OnlineSession } from './online/session';
 import { ProgressTracker } from './progress';
+import { celebrate } from './ui/celebrate';
 import { renderFinishResult, renderJoinPrompt, renderLeaderboard, renderNote } from './ui/online-panel';
 
 function byId<T extends HTMLElement>(id: string): T {
@@ -187,6 +188,8 @@ function advance(): void {
   updateHud();
   if (state.phase === 'victory') {
     showOverlay();
+    sound.play('fanfare');
+    celebrate(reducedMotion());
     void submitRun('victory');
   } else hideOverlay();
 }
@@ -329,18 +332,23 @@ function frame(timestamp: number): void {
   const dt = frameDelta(timestamp, lastTime);
   lastTime = timestamp;
   for (const event of step(state, keys, dt)) {
-    if (event === 'jump' || event === 'collect' || event === 'extraLife' || event === 'hit' || event === 'checkpoint' || event === 'powerup' || event === 'shieldBreak') sound.play(event);
+    // Pickups in a combo climb in pitch instead of repeating the plain collect sound.
+    if (event === 'collect') { if (state.combo.count >= 2) sound.combo(state.combo.count); else sound.play('collect'); }
+    if (event === 'jump' || event === 'extraLife' || event === 'hit' || event === 'checkpoint' || event === 'powerup' || event === 'shieldBreak') sound.play(event);
     if (event === 'extraLife') pulseHearts();
     if (event === 'scare' && state.scare) sound.scare(state.scare.kind);
     if (event === 'collect' || event === 'hit') updateHud();
     if (event === 'clear') {
       newBestStars = progress.recordClear(state.eraIndex, state.lastStars);
-      sound.play('star');
+      if (state.lastStars === 3) {
+        sound.play('fanfare');
+        celebrate(reducedMotion());
+      } else sound.play('star');
     }
     if (event === 'clear' || event === 'gameover') showOverlay();
     if (event === 'gameover') void submitRun('gameover');
   }
-  draw(state);
+  draw(state, timestamp / 1000);
   drawScareLayer(state.scare);
   requestAnimationFrame(frame);
 }

@@ -12,11 +12,11 @@ const DROPPER_WARN = 260;
 const wrap = (value: number, span: number, margin: number) => ((value % (W + span)) + W + span) % (W + span) - margin;
 
 export interface RenderOptions {
-  /** When true (the player prefers reduced motion), scares do not shake the screen. */
+  /** When true (the player prefers reduced motion), scares do not shake the screen and the hero does not dance. */
   reducedMotion?: () => boolean;
 }
 
-export function createRenderer(ctx: CanvasRenderingContext2D, options: RenderOptions = {}): (state: GameState) => void {
+export function createRenderer(ctx: CanvasRenderingContext2D, options: RenderOptions = {}): (state: GameState, time?: number) => void {
   function rect(x: number, y: number, w: number, h: number, color: string): void {
     ctx.fillStyle = color;
     ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
@@ -437,17 +437,24 @@ export function createRenderer(ctx: CanvasRenderingContext2D, options: RenderOpt
     }
   }
 
-  function drawPlayer(state: GameState): void {
+  /** `time` is wall-clock seconds, so the victory dance keeps going while the game itself is paused. */
+  function drawPlayer(state: GameState, time: number): void {
     const { player } = state;
     if (player.invulnerable > 0 && Math.floor(state.elapsed * 14) % 2 === 0) return;
-    const x = Math.round(player.x - state.cameraX); const y = Math.round(player.y);
+    // Victory dance on the era-clear and final screens: hop, turn, and wave.
+    const dancing = (state.phase === 'clear' || state.phase === 'victory') && !options.reducedMotion?.();
+    const facing = dancing ? (Math.floor(time / 0.3) % 2 ? -1 : 1) : player.facing;
+    const x = Math.round(player.x - state.cameraX);
+    const y = Math.round(player.y - (dancing ? Math.abs(Math.sin(time * 7)) * 12 : 0));
+    const armsUp = dancing && Math.floor(time / 0.15) % 2 === 0;
     ctx.save();
-    if (player.facing < 0) { ctx.translate(x + player.w, 0); ctx.scale(-1, 1); } else ctx.translate(x, 0);
+    if (facing < 0) { ctx.translate(x + player.w, 0); ctx.scale(-1, 1); } else ctx.translate(x, 0);
     // Tiny time-traveler silhouette, intentionally built from crisp canvas blocks.
     rect(7, y + 1, 20, 17, '#f2c36b');
     rect(11, y + 5, 3, 3, '#172d36'); rect(22, y + 5, 3, 3, '#172d36');
     rect(9, y + 18, 19, 16, '#2e9a91');
-    rect(3, y + 19, 8, 6, '#eaa959'); rect(27, y + 20, 7, 6, '#eaa959');
+    if (armsUp) { rect(3, y + 8, 6, 12, '#eaa959'); rect(28, y + 8, 6, 12, '#eaa959'); }
+    else { rect(3, y + 19, 8, 6, '#eaa959'); rect(27, y + 20, 7, 6, '#eaa959'); }
     rect(10, y + 33, 7, 10, '#e8b85e'); rect(21, y + 33, 7, 10, '#e8b85e');
     rect(8, y + 41, 10, 3, '#30404b'); rect(20, y + 41, 11, 3, '#30404b');
     rect(9, y - 2, 18, 4, '#415b64'); rect(13, y - 6, 11, 4, '#5fe2cb');
@@ -545,7 +552,7 @@ export function createRenderer(ctx: CanvasRenderingContext2D, options: RenderOpt
     drawFlag(CHECKPOINT_X + 60 - state.cameraX, reached ? era.accent : '#8a9095', reached ? 94 : 40);
   }
 
-  return function draw(state: GameState): void {
+  return function draw(state: GameState, time = 0): void {
     const era = ERAS[state.eraIndex];
     const scare = state.scare;
     ctx.save();
@@ -562,7 +569,7 @@ export function createRenderer(ctx: CanvasRenderingContext2D, options: RenderOpt
     drawPowerUps(state);
     for (const p of state.particles) { ctx.globalAlpha = Math.max(0, p.life / PARTICLE_LIFE); rect(p.x - state.cameraX, p.y, 4, 4, p.color); }
     ctx.globalAlpha = 1;
-    drawPlayer(state);
+    drawPlayer(state, time);
     drawShieldBubble(state);
     for (const popup of state.popups) {
       ctx.globalAlpha = Math.min(1, popup.life / (POPUP_LIFE * 0.5));

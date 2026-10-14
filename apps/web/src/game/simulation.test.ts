@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { CHECKPOINT_X, ERAS, FLOOR, H, HAZARD_XS, SKINS, START_X, WORLD_END, type EraId } from './config';
 import { CHECKPOINT_SAFE, FINISH_SAFE, START_SAFE, levelLayout } from './level';
 import {
-  CRUMBLE_TIME, DOUBLE_JUMP_TIME, FREEZE_TIME, MAGNET_TIME, SCARE_TIME, STAR_PICKUPS, advanceEra, beginGame, buildLevel, createGame,
+  COMBO_WINDOW, CRUMBLE_TIME, DOUBLE_JUMP_TIME, FREEZE_TIME, MAGNET_TIME, SCARE_TIME, STAR_PICKUPS, advanceEra, beginGame, buildLevel, createGame,
   frameDelta, groundAt, requestJump, retryEra, starsFor, step, type PowerKind,
   type GameEvent, type GameState
 } from './simulation';
@@ -211,7 +211,7 @@ describe('pickups and damage', () => {
     expect(collectNext()).not.toContain('extraLife');
     expect(collectNext()).toContain('extraLife');
     expect(state).toMatchObject({ score: 2000, lives: 4 });
-    expect(state.popups).toEqual([expect.objectContaining({ text: '+1 ♥' })]);
+    expect(state.popups.map(p => p.text)).toContain('+1 ♥');
     run(state, idle, 90);
     expect(state.popups).toEqual([]);
 
@@ -569,6 +569,39 @@ describe('star ratings', () => {
     state.player.x = state.hazards[0].x;
     step(state, idle, DT);
     expect(state.eraHits).toBe(1);
+  });
+});
+
+describe('combos', () => {
+  /** Puts the next untaken pickup on the player and steps once. */
+  function collectNext(state: GameState): GameEvent[] {
+    const pickup = state.pickups.find(p => !p.taken);
+    if (!pickup) throw new Error('no pickups left');
+    pickup.x = state.player.x + state.player.w / 2;
+    pickup.y = state.player.y + state.player.h / 2;
+    return step(state, idle, DT, () => 0.5);
+  }
+
+  it('counts quick pickups as a combo without changing the score', () => {
+    const state = clearArea(playing());
+    state.pickups = playing().pickups;
+    expect(collectNext(state)).not.toContain('combo');
+    expect(collectNext(state)).toContain('combo');
+    collectNext(state);
+    expect(state.combo.count).toBe(3);
+    expect(state.score).toBe(300);
+    expect(state.popups.map(p => p.text)).toEqual(['x2', 'x3']);
+  });
+
+  it('marks big combos and resets after a pause', () => {
+    const state = clearArea(playing());
+    state.pickups = playing().pickups;
+    for (let i = 0; i < 5; i++) collectNext(state);
+    expect(state.popups.at(-1)?.text).toBe('x5!');
+    run(state, idle, Math.ceil(COMBO_WINDOW / DT) + 1);
+    expect(state.combo.count).toBe(0);
+    expect(collectNext(state)).not.toContain('combo');
+    expect(state.combo.count).toBe(1);
   });
 });
 

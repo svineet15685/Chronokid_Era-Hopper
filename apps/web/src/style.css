@@ -167,6 +167,10 @@ button:active { transform: translateY(2px); box-shadow: 0 2px 0 #819b47; }
   .brand { display: none; }
   .topbar { justify-content: flex-end; }
 }
+/* Confetti for perfect eras and victory (created by ui/celebrate.ts; skipped for reduced motion). */
+.confetti { position: fixed; z-index: 6; inset: 0; overflow: hidden; pointer-events: none; }
+.confetti span { position: absolute; top: -16px; width: 9px; height: 14px; border-radius: 2px; animation: confetti-fall var(--fall, 2.6s) linear var(--delay, 0s) forwards; }
+@keyframes confetti-fall { to { transform: translate(var(--drift, 0), 110vh) rotate(var(--spin, 540deg)); } }
 /* Players who prefer reduced motion get instant menus (the canvas skips shake and flash in code). */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }

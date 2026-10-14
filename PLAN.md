@@ -112,12 +112,12 @@ Status: implemented on branch `phase-5-release-readiness` (2026-10-13); pending 
 
 ### Phase 6: Fun and Engagement (kids)
 
-Status: in progress (started 2026-10-13; 6.1 to 6.3 done 2026-10-14, next: 6.4). Ordered from easy to hard; work top to bottom and tick items when merged. Every item keeps the safety rules: no chat, no typed text, picked names only, and the game never blocks on the network.
+Status: in progress (started 2026-10-13; 6.1 to 6.4 done 2026-10-14, next: 6.5). Ordered from easy to hard; work top to bottom and tick items when merged. Every item keeps the safety rules: no chat, no typed text, picked names only, and the game never blocks on the network.
 
 - [x] 6.1 Power-ups: shield (absorbs one hit), time freeze (hazards stop for a few seconds), magnet (pulls nearby pickups), double jump. Two per era, shown with an on-screen timer. Done 2026-10-14 (branch `fun-1-powerups-stars-levels`): boxes float above two ledges per era, kinds rotate by era; freeze uses a separate hazard clock; timer badges bottom-left; shield bubble and icy tint on frozen hazards.
 - [x] 6.2 Star ratings: 1 star for clearing an era, +1 for collecting at least 20 of 25 pickups, +1 for taking no damage. Best stars per era are remembered on the device. Done 2026-10-14: stars and tips for missed stars on the era-clear screen; shield blocks do not count as hits; progress in `localStorage` (`chronokid.progress`), sanitized on load.
 - [x] 6.3 Level-select map: replay any era already reached, as practice (practice runs do not go on the leaderboard). Done 2026-10-14: 🗺️ Eras dialog with locked eras and best stars; practice runs are never submitted.
-- [ ] 6.4 Fun feedback: pickup combos ("x5!"), a celebration for a perfect era, a victory dance.
+- [x] 6.4 Fun feedback: pickup combos ("x5!"), a celebration for a perfect era, a victory dance. Done 2026-10-14 (branch `fun-2-feedback`): pickups within 1.2 s build a combo with a rising-pitch chime and "x2", "x3"... "x5!" popups (cosmetic only, score unchanged); 3-star eras and the final victory get confetti and a fanfare; Chronokid dances on clear and victory screens. Confetti and the dance are skipped for reduced motion.
 - [ ] 6.5 Unlockable looks: hats and outfits earned with stars (caveman helmet, Viking horns, pirate eyepatch, astronaut helmet).
 - [ ] 6.6 Difficulty choice: Easy (extra lives, slower hazards) and Hard, chosen on the start screen; leaderboard runs use Normal.
 - [ ] 6.7 Background music: a synthesized tune per era (no audio files), faster during danger, with its own mute toggle.

@@ -1,7 +1,7 @@
 // Synthesized sound effects; no external audio assets.
 import type { ScareKind } from './config';
 
-export type SoundName = 'jump' | 'collect' | 'extraLife' | 'hit' | 'advance' | 'checkpoint' | 'powerup' | 'shieldBreak' | 'star';
+export type SoundName = 'jump' | 'collect' | 'extraLife' | 'hit' | 'advance' | 'checkpoint' | 'powerup' | 'shieldBreak' | 'star' | 'fanfare';
 
 declare global {
   interface Window { webkitAudioContext?: typeof AudioContext }
@@ -86,7 +86,15 @@ export function createSound() {
     if (name === 'powerup') [392, 523, 659, 784, 1047].forEach((f, i) => tone(f, 0.09, 'triangle', 0.04, f * 1.02, i * 0.05));
     if (name === 'shieldBreak') { noise(0.25, 0.06, 'highpass', 3000); tone(1200, 0.2, 'sine', 0.04, 500); }
     if (name === 'star') tone(1319, 0.14, 'sine', 0.045, 1760);
+    if (name === 'fanfare') [[523, 0], [659, 0.12], [784, 0.24], [1047, 0.36], [784, 0.5], [1047, 0.62]].forEach(([f, at]) => tone(f, at === 0.62 ? 0.4 : 0.12, 'square', 0.04, f, at));
     if (name === 'checkpoint') { tone(523, 0.1, 'triangle', 0.04); tone(659, 0.1, 'triangle', 0.04, 659, 0.09); tone(784, 0.18, 'triangle', 0.045, 784, 0.18); }
+  }
+
+  /** Each pickup in a combo plays a semitone higher than the last, up to an octave. */
+  function combo(count: number): void {
+    if (!enabled) return;
+    const step = Math.min(count - 1, 12);
+    tone(620 * 2 ** (step / 12), 0.08, 'sine', 0.045, 920 * 2 ** (step / 12));
   }
 
   /** A short, startling (but not ear-splitting) creature sound. */
@@ -116,5 +124,5 @@ export function createSound() {
     enabled = on;
   }
 
-  return { start, play, scare, toggle, setEnabled };
+  return { start, play, combo, scare, toggle, setEnabled };
 }
