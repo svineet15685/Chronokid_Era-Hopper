@@ -37,6 +37,7 @@
             <button class="secondary" id="restart" hidden>Play Again</button>
             <button class="secondary" id="eras-open" type="button">🗺️ Eras</button>
             <button class="secondary" id="looks-open" type="button">👕 Looks</button>
+            <button class="secondary" id="stickers-open" type="button">🏅 Stickers</button>
             <button class="secondary" id="leaderboard-open" type="button">🏆 Leaderboard</button>
           </div>
           <div class="menu-links">
@@ -63,6 +64,15 @@
           <p class="board-note" id="looks-note"></p>
           <ol class="look-grid" id="looks-grid"></ol>
           <button id="looks-close" type="button">Done</button>
+        </div>
+      </section>
+      <section class="overlay board-overlay hidden" id="stickers" role="dialog" aria-modal="true" aria-labelledby="stickers-title">
+        <div class="panel">
+          <div class="eyebrow">Goals to aim for</div>
+          <h1 id="stickers-title">Sticker<br /><em>book</em></h1>
+          <p class="board-note" id="stickers-note"></p>
+          <ul class="sticker-grid" id="stickers-grid" tabindex="0" aria-label="Stickers"></ul>
+          <button id="stickers-close" type="button">Done</button>
         </div>
       </section>
       <section class="overlay board-overlay hidden" id="grownups" role="dialog" aria-modal="true" aria-labelledby="grownups-title">
@@ -103,6 +113,7 @@
           <button id="board-close" type="button">Back</button>
         </div>
       </section>
+      <div class="sticker-toast" id="sticker-toast" role="status"></div>
       <div class="mobile-controls" aria-label="Touch controls">
         <div class="mobile-group"><button data-control="left" aria-label="Move left">←</button><button data-control="right" aria-label="Move right">→</button></div>
         <button class="jump" data-control="jump" aria-label="Jump">JUMP</button>

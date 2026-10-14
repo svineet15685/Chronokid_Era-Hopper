@@ -122,6 +122,8 @@ export interface GameState {
   lastStars: number;
   /** Pickups grabbed in quick succession. Cosmetic only: combos never change the score. */
   combo: { count: number; timer: number };
+  /** The most recent power-up collected (for the sticker book). */
+  lastPower: PowerKind | null;
   /** The era's boss, if it has one; the finish stays locked until it is beaten. */
   boss: Boss | null;
   /** The era's secret: a cracked block to bonk from below, which opens a portal to a bonus room. */
@@ -219,6 +221,7 @@ export function buildLevel(state: GameState, eraIndex: number): void {
   state.eraHits = 0;
   state.lastStars = 0;
   state.combo = { count: 0, timer: 0 };
+  state.lastPower = null;
   state.boss = era.boss ? createBoss(era.boss) : null;
   state.room = null;
   state.secret = placeSecret();
@@ -553,6 +556,7 @@ export function step(state: GameState, input: MoveInput, dt: number, random: () 
     const half = POWER_UP_SIZE / 2;
     if (powerup.taken || !overlaps(player, { x: powerup.x - half, y: powerup.y - half, w: POWER_UP_SIZE, h: POWER_UP_SIZE })) continue;
     powerup.taken = true;
+    state.lastPower = powerup.kind;
     if (powerup.kind === 'shield') effects.shield = true;
     if (powerup.kind === 'freeze') effects.freeze = FREEZE_TIME;
     if (powerup.kind === 'magnet') effects.magnet = MAGNET_TIME;
