@@ -19,12 +19,22 @@ updates:
       interval: weekly
     cooldown:
       default-days: 7
+    # Major base-image upgrades (a new Node line, a new PostgreSQL version) need a deliberate,
+    # tested migration, so they are done by hand. Patch, minor, and digest updates still arrive.
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: docker-compose
     directory: "/"
     schedule:
       interval: weekly
     cooldown:
       default-days: 7
+    # Major base-image upgrades (a new Node line, a new PostgreSQL version) need a deliberate,
+    # tested migration, so they are done by hand. Patch, minor, and digest updates still arrive.
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: "/"
     schedule:

@@ -23,12 +23,23 @@
           <h1 id="title">Chronokid:<br /><em>Era Hopper</em></h1>
           <p class="subtitle" id="message">Dash through ten strange ages, scoop up the shiny stuff, and keep your feet out of trouble. Watch out for surprises!</p>
           <div class="controls-copy" id="instructions"><span><kbd>←</kbd> <kbd>→</kbd> move</span><span><kbd>SPACE</kbd> / <kbd>↑</kbd> jump</span><span>Collect everything you can.</span></div>
+          <div class="stars" id="stars" hidden><p class="star-row" id="star-row"></p><p class="star-hint" id="star-hint"></p></div>
           <div class="online" id="online" aria-live="polite"></div>
           <div class="menu-actions">
             <button id="action">Play Game</button>
             <button class="secondary" id="restart" hidden>Play Again</button>
+            <button class="secondary" id="eras-open" type="button">🗺️ Eras</button>
             <button class="secondary" id="leaderboard-open" type="button">🏆 Leaderboard</button>
           </div>
+        </div>
+      </section>
+      <section class="overlay board-overlay hidden" id="map" role="dialog" aria-modal="true" aria-labelledby="map-title">
+        <div class="panel">
+          <div class="eyebrow">Pick a stop on the timeline</div>
+          <h1 id="map-title">Era<br /><em>map</em></h1>
+          <p class="board-note">Replay any era you have reached. Practice runs don't go on the leaderboard.</p>
+          <ol class="era-grid" id="era-grid"></ol>
+          <button id="map-close" type="button">Back</button>
         </div>
       </section>
       <section class="overlay board-overlay hidden" id="board" role="dialog" aria-modal="true" aria-labelledby="board-title">

@@ -110,6 +110,26 @@ Status: implemented on branch `phase-5-release-readiness` (2026-10-13); pending 
 - Verified (2026-10-13): a production build served by the built API loads with the CSP and no browser console errors, and the test hook is absent; the Dockerfile's steps rehearsed outside Docker (clean `npm ci --ignore-scripts`, build, prune to 46 MB, migrate and serve from the runtime layout). 81 API tests, 85 web tests, and 59 Playwright runs pass. The image itself is first built by CI, since Docker is not installed locally.
 - Next action: push, confirm the new container job and the rest of CI pass, then work through the release checklist in `docs/operations.md` when choosing a host.
 
+### Phase 6: Fun and Engagement (kids)
+
+Status: in progress (started 2026-10-13; 6.1 to 6.3 done 2026-10-14, next: 6.4). Ordered from easy to hard; work top to bottom and tick items when merged. Every item keeps the safety rules: no chat, no typed text, picked names only, and the game never blocks on the network.
+
+- [x] 6.1 Power-ups: shield (absorbs one hit), time freeze (hazards stop for a few seconds), magnet (pulls nearby pickups), double jump. Two per era, shown with an on-screen timer. Done 2026-10-14 (branch `fun-1-powerups-stars-levels`): boxes float above two ledges per era, kinds rotate by era; freeze uses a separate hazard clock; timer badges bottom-left; shield bubble and icy tint on frozen hazards.
+- [x] 6.2 Star ratings: 1 star for clearing an era, +1 for collecting at least 20 of 25 pickups, +1 for taking no damage. Best stars per era are remembered on the device. Done 2026-10-14: stars and tips for missed stars on the era-clear screen; shield blocks do not count as hits; progress in `localStorage` (`chronokid.progress`), sanitized on load.
+- [x] 6.3 Level-select map: replay any era already reached, as practice (practice runs do not go on the leaderboard). Done 2026-10-14: 🗺️ Eras dialog with locked eras and best stars; practice runs are never submitted.
+- [ ] 6.4 Fun feedback: pickup combos ("x5!"), a celebration for a perfect era, a victory dance.
+- [ ] 6.5 Unlockable looks: hats and outfits earned with stars (caveman helmet, Viking horns, pirate eyepatch, astronaut helmet).
+- [ ] 6.6 Difficulty choice: Easy (extra lives, slower hazards) and Hard, chosen on the start screen; leaderboard runs use Normal.
+- [ ] 6.7 Background music: a synthesized tune per era (no audio files), faster during danger, with its own mute toggle.
+- [ ] 6.8 Intro story: three or four comic panels on first launch explaining the broken time machine; skippable.
+- [ ] 6.9 Bosses: one per era with simple, readable patterns, starting with the Stone Age T-rex.
+- [ ] 6.10 Secret areas: hidden doors and breakable walls leading to bonus rooms.
+- [ ] 6.11 Achievements and stickers: a sticker book of goals ("collect every berry", "beat the Kraken without a hit").
+- [ ] 6.12 Installable app: web app manifest, icons, and offline play ("Add to home screen").
+- [ ] 6.13 Daily challenge: one shared seeded level per day with its own small leaderboard (API changes).
+- [ ] 6.14 Two players on one device: shared screen, second character on WASD or split touch controls.
+- [ ] 6.15 Crew leaderboard: join a friends group with a picked share code (for example TIGER-42); no chat (API changes).
+
 ## Decisions and Scope Boundaries
 
 - MVP identity is guest-based; do not add passwords, email, OAuth, or account recovery without a new scope decision.
