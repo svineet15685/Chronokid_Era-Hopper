@@ -1,6 +1,6 @@
 # Chronokid: Era Hopper Project Plan
 
-Last reviewed: 2026-10-12
+Last reviewed: 2026-10-18
 
 ## Resume First
 
@@ -13,8 +13,11 @@ Last reviewed: 2026-10-12
 
 - Phase 0 guardrails: complete. Shared instructions, API security rules, resumable plan, CI, Dependabot, and read-only code review agent are in place. Type-check, production build, migration drift check, audit threshold, and env ignore checks passed.
 - Phase 1 foundation: complete (2026-10-11). Docker is unavailable and port 5432 belongs to an unrelated PostgreSQL 18 service, so development uses a project-only PostgreSQL 18 cluster created with `initdb` at `%LOCALAPPDATA%\Chronokid\pgdata` on `localhost:5433` (`npm run db:local:start|stop|status`). Its randomly generated password exists only in the ignored root `.env`. Migration `0000_legal_praxagora` is applied. The cluster is not a Windows service; start it after reboots.
-- Phase 2 game migration: complete and committed (`ffd243e`, branch `phase-2-game-migration`). The root prototype was deleted at the user's request on 2026-10-12 (recoverable from `ffd243e`).
-- Phase 2b ten-era expansion (user-requested scope change, 2026-10-12): complete, committed as `1afa749` on `phase-2-game-migration`. See the Phase 2b section.
+- Phase 2 game migration: complete and merged to `main` (PRs #10 and #11, 2026-10-12). The root prototype was deleted at the user's request on 2026-10-12 (recoverable from `ffd243e`).
+- Phase 2b ten-era expansion (user-requested scope change, 2026-10-12): complete and merged to `main` (PR #11). See the Phase 2b section.
+- Phases 3 to 5 merged to `main`: persistence API (PR #16, 2026-10-12), client integration (PR #17, 2026-10-13), release readiness (PR #18, 2026-10-13). Hosting is still not configured.
+- Phase 6 fun items 6.1 to 6.12 merged to `main` (PRs #21 to #27, last on 2026-10-15). Next: 6.13 installable app.
+- Branches (2026-10-18): all feature branches are merged; local branches other than `main` were deleted. The merged branches still exist on GitHub. The only open PR is Dependabot's `concurrently` 10.0.5.
 - Phase 1 recheck (2026-10-12) after Dependabot major upgrades (TypeScript 7, Vite 8, Zod 4, dotenv 18, @fastify/cors 11, @types/node 26): clean install, type-check, build, high-severity audit, migration drift, and `/api/health/ready` all pass.
 - CI/CD hardening (2026-10-12, user request; testing and security only, no deployment): `ci.yml` splits into lint/type-check/build/unit, Playwright browser tests (report artifact on failure), PostgreSQL migration + built-API readiness, dependency audit (`--omit=dev` at any severity, all at high) with registry signature verification, PR dependency review, and zizmor workflow linting; `codeql.yml` runs security-extended queries for TypeScript and Actions on PRs, main, and weekly. Actions and the CI PostgreSQL image are pinned by SHA/digest; Dependabot groups updates and uses a 7-day cooldown. oxlint (`npm run lint`) was added because typescript-eslint does not yet support TypeScript 7. Repository settings (main ruleset with required checks, secret scanning push protection, Dependabot alerts, private vulnerability reporting, read-only Actions token) must be enabled by the user; see README. Deployment is deliberately out of scope until the user configures it.
 - Stack: npm workspaces, Vite + TypeScript client, Fastify + TypeScript API, PostgreSQL + Drizzle, shared TypeScript contracts.
@@ -59,7 +62,7 @@ Status: complete (2026-10-12)
 
 ### Phase 2b: Ten-Era Expansion
 
-Status: complete (2026-10-12), committed as `1afa749`; playtested and approved by the user
+Status: complete (2026-10-12), committed as `1afa749` and merged to `main` (PR #11); playtested and approved by the user
 
 - Requested by the user after their child played Phase 2: ten eras, each harder, with jump scares. Decisions: "spooky-silly" scares with an on/off toggle; timeline lineup Stone Age, Ancient Egypt, Viking Age, Medieval, Pirate, Wild West, Haunted Manor, Steam Age, Future, End of Time; mid-level checkpoints.
 - Stone Age keeps the original layout and physics. Later eras raise hazard tempo, add pits (0 to 5), hazard counts (9 to 15), crumbling ledges (Egypt, Haunted, End), ice (Viking), droppers, and projectiles. Layouts come from `apps/web/src/game/level.ts` (ground slots for pits and ground hazards, air hazards halfway between).
@@ -67,11 +70,11 @@ Status: complete (2026-10-12), committed as `1afa749`; playtested and approved b
 - Jump scares (`scares.ts`): one to three per era; the world freezes for 1.1 s while a cartoon creature pops up over the whole screen (a separate viewport-sized canvas) with a shake, flash, and synthesized sound. No captions, by user request. The 👻 toggle and the sound toggle persist in `localStorage` (failures fall back to defaults). Scare spots passed while scares are off are consumed.
 - Verified (2026-10-12): 75 Vitest tests (including per-era fairness checks: pits narrower than 70% of the era's jump distance, clear start/checkpoint/finish, no ground hazard swaying into a pit), 25 Playwright checks on desktop and both mobile orientations, type-check, and build. All ten eras and scare creatures were visually reviewed in contact sheets.
 - Extra lives (2026-10-12, user request): +1 life each time the score passes a multiple of 2,000 (`EXTRA_LIFE_POINTS`), capped at 5 (`MAX_LIVES`), with a jingle, a floating "+1 ♥", and pulsing hearts. Collected pickups stay collected after checkpoint respawns, and game-over retries reset lives to 3, so lives cannot be farmed.
-- Tuning: difficulty knobs are `tempo`, `spacing`, `pits`, and `pitWidth` per era in `config.ts`. Open item: merge the branch into `main`.
+- Tuning: difficulty knobs are `tempo`, `spacing`, `pits`, and `pitWidth` per era in `config.ts`. Extra lives merged separately (PR #15).
 
 ### Phase 3: Persistence API
 
-Status: implemented on branch `phase-3-persistence-api` (2026-10-12); pending commit, CI, and review
+Status: complete, merged to `main` (PR #16, 2026-10-12)
 
 - Add guest identity, run lifecycle, validated result submission, and leaderboard persistence using the existing `players` and `runs` schema as a starting point; revise schema through reviewed migrations.
 - Enforce input bounds, ownership, rate limits, generic errors, and persistence tests. Treat client results as casual, not cheat-proof.
@@ -81,11 +84,11 @@ Status: implemented on branch `phase-3-persistence-api` (2026-10-12); pending co
 - `GAME_RULES` in `packages/shared` is the single source for era count, pickups per era, and pickup points, used by the game and the API. Because the API imports runtime values from it, `shared` now builds to `dist/` and exposes a `source` export condition for dev tools. The CI readiness step caught the missing build before merge.
 - Verified (2026-10-12): 62 API tests (32 validation unit tests and 30 integration tests against PostgreSQL, including the database-down case), 77 web unit tests, type-check, lint, and a production smoke test of the built API. CI's database job now runs the API integration tests with `REQUIRE_DB_TESTS=1`.
 - Known limits: display names are character-restricted but not moderated (no profanity filter); rate limits are in memory, so they reset on restart and are per instance. Revisit both before public release.
-- Next action: Phase 4 client integration (name entry, run submission, leaderboard view, offline handling).
+- Followed by Phase 4 (done).
 
 ### Phase 4: Client Integration
 
-Status: implemented on branch `phase-4-client-integration` (2026-10-12); pending commit, CI, and review
+Status: complete, merged to `main` (PR #17, 2026-10-13)
 
 - Add display-name setup, run submission, best-score/leaderboard views, and loading/error/offline states.
 - Exit: an end-to-end browser flow persists a completed run and renders the returned result without breaking local single-player play.
@@ -95,11 +98,11 @@ Status: implemented on branch `phase-4-client-integration` (2026-10-12); pending
 - Layout: menus now scroll when taller than their space and use the whole viewport on short landscape screens (with compact type) and for the leaderboard; portrait toggles moved to the screen corner. These fixed real clipping found by the new browser tests (the Back button was unreachable once the board had several rows).
 - Verified (2026-10-12): 85 web unit tests (including the online session against a fake API: offline, server errors, refusals, expired tokens, retries, opting in), 78 API tests, and 49 Playwright runs across desktop, portrait, and landscape, including the full-stack flow against a real API and `_test` database and the offline flow. CI's browser job now has its own PostgreSQL and requires the full-stack tests.
 - Known limits: guest tokens live in `localStorage` (an XSS bug could read them; all network text is rendered with `textContent`); clearing browser data creates a new guest. There is no "leave the leaderboard" option yet.
-- Next action: Phase 5 release readiness.
+- Followed by Phase 5 (done).
 
 ### Phase 5: Release Readiness
 
-Status: implemented on branch `phase-5-release-readiness` (2026-10-13); pending commit, CI, and review. Deployment itself is deliberately not done; the user will configure hosting later.
+Status: complete, merged to `main` (PR #18, 2026-10-13). Deployment itself is deliberately not done; the user will configure hosting later.
 
 - Complete accessibility/responsive checks, security/dependency review, deployment configuration, backups/migration runbook, and operational health checks.
 - Exit: CI is green, secrets are configured outside source control, deployment and rollback are documented, and score-integrity limitations are visible to operators/users.
@@ -108,11 +111,11 @@ Status: implemented on branch `phase-5-release-readiness` (2026-10-13); pending 
 - Accessibility: axe (WCAG 2.1 A/AA) checks on the start, game-over, and leaderboard screens; keyboard-only flow test; end screens focus their main button (fixed a visibility transition that made the menus unfocusable for one frame); visible focus rings; leaderboard is a labelled modal dialog with Escape to close; `prefers-reduced-motion` disables menu animation, scare screen shake, flash, and pop-in.
 - Users see the casual-score limitation on the leaderboard screen; operators in `docs/operations.md`, which also covers configuration, least-privilege database roles, deploy, rollback (forward-only, backward-compatible migrations), backups with a monthly restore drill, health checks, TLS/HSTS at the proxy, single-instance rate limits, maintenance SQL, monitoring, password rotation, and a release checklist.
 - Verified (2026-10-13): a production build served by the built API loads with the CSP and no browser console errors, and the test hook is absent; the Dockerfile's steps rehearsed outside Docker (clean `npm ci --ignore-scripts`, build, prune to 46 MB, migrate and serve from the runtime layout). 81 API tests, 85 web tests, and 59 Playwright runs pass. The image itself is first built by CI, since Docker is not installed locally.
-- Next action: push, confirm the new container job and the rest of CI pass, then work through the release checklist in `docs/operations.md` when choosing a host.
+- Next action (when choosing a host): work through the release checklist in `docs/operations.md`, and enable the GitHub repository settings listed in the README if not done yet.
 
 ### Phase 6: Fun and Engagement (kids)
 
-Status: in progress (started 2026-10-13; 6.1 to 6.12 done 2026-10-14, next: 6.13 installable app). Ordered from easy to hard; work top to bottom and tick items when merged. Every item keeps the safety rules: no chat, no typed text, picked names only, and the game never blocks on the network.
+Status: in progress (started 2026-10-13; 6.1 to 6.12 done 2026-10-14 and merged by 2026-10-15 via PRs #21 to #27, next: 6.13 installable app). Ordered from easy to hard; work top to bottom and tick items when merged. Every item keeps the safety rules: no chat, no typed text, picked names only, and the game never blocks on the network.
 
 - [x] 6.1 Power-ups: shield (absorbs one hit), time freeze (hazards stop for a few seconds), magnet (pulls nearby pickups), double jump. Two per era, shown with an on-screen timer. Done 2026-10-14 (branch `fun-1-powerups-stars-levels`): boxes float above two ledges per era, kinds rotate by era; freeze uses a separate hazard clock; timer badges bottom-left; shield bubble and icy tint on frozen hazards.
 - [x] 6.2 Star ratings: 1 star for clearing an era, +1 for collecting at least 20 of 25 pickups, +1 for taking no damage. Best stars per era are remembered on the device. Done 2026-10-14: stars and tips for missed stars on the era-clear screen; shield blocks do not count as hits; progress in `localStorage` (`chronokid.progress`), sanitized on load.
